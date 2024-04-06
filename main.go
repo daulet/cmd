@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	co "github.com/cohere-ai/cohere-go/v2"
 	cocli "github.com/cohere-ai/cohere-go/v2/client"
@@ -29,16 +31,26 @@ func run(ctx context.Context) error {
 			return scanner.Err()
 		}
 		prompt := scanner.Text()
-		response, err := client.Chat(
-			ctx,
-			&co.ChatRequest{
-				ChatHistory: msgs,
-				Message:     prompt,
-			},
-		)
+		stream, err := client.ChatStream(ctx, &co.ChatStreamRequest{
+			ChatHistory: msgs,
+			Message:     prompt,
+		})
 		if err != nil {
 			return err
 		}
+		var response strings.Builder
+		for msg, err := stream.Recv(); err != io.EOF; msg, err = stream.Recv() {
+			if err != nil {
+				return err
+			}
+			if msg.TextGeneration == nil {
+				continue
+			}
+			response.WriteString(msg.TextGeneration.Text)
+			fmt.Print(msg.TextGeneration.Text)
+		}
+		stream.Close()
+		fmt.Println()
 		msgs = append(msgs,
 			&co.ChatMessage{
 				Role:    co.ChatMessageRoleUser,
@@ -46,10 +58,9 @@ func run(ctx context.Context) error {
 			},
 			&co.ChatMessage{
 				Role:    co.ChatMessageRoleChatbot,
-				Message: response.Text,
+				Message: response.String(),
 			},
 		)
-		fmt.Println(response.Text)
 	}
 }
 
