@@ -5,7 +5,9 @@ import (
 	"context"
 	"io"
 	"os"
-	"strings"
+
+	"github.com/daulet/llm-cli/cohere"
+	"github.com/daulet/llm-cli/parser"
 
 	co "github.com/cohere-ai/cohere-go/v2"
 	cocli "github.com/cohere-ai/cohere-go/v2/client"
@@ -22,10 +24,10 @@ func write(out *bufio.Writer, s string) {
 
 func run(ctx context.Context, in io.Reader, out io.Writer) error {
 	var (
-		reader = bufio.NewScanner(in)
-		writer = bufio.NewWriter(out)
-		client = cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
-		msgs   []*co.ChatMessage
+		r    = bufio.NewScanner(in)
+		w    = bufio.NewWriter(out)
+		cl   = cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
+		msgs []*co.ChatMessage
 	)
 	for {
 		select {
@@ -34,40 +36,36 @@ func run(ctx context.Context, in io.Reader, out io.Writer) error {
 		default:
 		}
 
-		write(writer, "User> ")
-		if !reader.Scan() {
-			return reader.Err()
+		write(w, "User> ")
+		if !r.Scan() {
+			return r.Err()
 		}
-		prompt := reader.Text()
-		stream, err := client.ChatStream(ctx, &co.ChatStreamRequest{
+		userMsg := r.Text()
+		stream, err := cl.ChatStream(ctx, &co.ChatStreamRequest{
 			ChatHistory: msgs,
-			Message:     prompt,
+			Message:     userMsg,
 		})
 		if err != nil {
 			return err
 		}
-		var response strings.Builder
-		for msg, err := stream.Recv(); err != io.EOF; msg, err = stream.Recv() {
-			if err != nil {
-				return err
-			}
-			if msg.TextGeneration == nil {
-				continue
-			}
-			response.WriteString(msg.TextGeneration.Text)
-			write(writer, msg.TextGeneration.Text)
+
+		rr := io.TeeReader(cohere.ReadFrom(stream), w)
+		var parser = parser.NewBuffer()
+		_, err = io.Copy(parser, rr)
+		if err != nil {
+			return err
 		}
 		stream.Close()
-		write(writer, "\n")
+		write(w, "\n")
 
 		msgs = append(msgs,
 			&co.ChatMessage{
 				Role:    co.ChatMessageRoleUser,
-				Message: prompt,
+				Message: userMsg,
 			},
 			&co.ChatMessage{
 				Role:    co.ChatMessageRoleChatbot,
-				Message: response.String(),
+				Message: parser.String(),
 			},
 		)
 	}
