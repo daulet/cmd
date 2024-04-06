@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -14,11 +13,20 @@ import (
 
 const apiKeyEnvVar = "COHERE_API_KEY"
 
-func run(ctx context.Context) error {
-	client := cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
-	scanner := bufio.NewScanner(os.Stdin)
+func write(out *bufio.Writer, s string) {
+	if _, err := out.Write([]byte(s)); err != nil {
+		panic(err)
+	}
+	out.Flush()
+}
 
-	var msgs []*co.ChatMessage
+func run(ctx context.Context, in io.Reader, out io.Writer) error {
+	var (
+		reader = bufio.NewScanner(in)
+		writer = bufio.NewWriter(out)
+		client = cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
+		msgs   []*co.ChatMessage
+	)
 	for {
 		select {
 		case <-ctx.Done():
@@ -26,11 +34,11 @@ func run(ctx context.Context) error {
 		default:
 		}
 
-		fmt.Print("User> ")
-		if !scanner.Scan() {
-			return scanner.Err()
+		write(writer, "User> ")
+		if !reader.Scan() {
+			return reader.Err()
 		}
-		prompt := scanner.Text()
+		prompt := reader.Text()
 		stream, err := client.ChatStream(ctx, &co.ChatStreamRequest{
 			ChatHistory: msgs,
 			Message:     prompt,
@@ -47,10 +55,11 @@ func run(ctx context.Context) error {
 				continue
 			}
 			response.WriteString(msg.TextGeneration.Text)
-			fmt.Print(msg.TextGeneration.Text)
+			write(writer, msg.TextGeneration.Text)
 		}
 		stream.Close()
-		fmt.Println()
+		write(writer, "\n")
+
 		msgs = append(msgs,
 			&co.ChatMessage{
 				Role:    co.ChatMessageRoleUser,
@@ -66,7 +75,7 @@ func run(ctx context.Context) error {
 
 func main() {
 	ctx := context.Background()
-	if err := run(ctx); err != nil {
+	if err := run(ctx, os.Stdin, os.Stdout); err != nil {
 		panic(err)
 	}
 }
