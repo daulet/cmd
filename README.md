@@ -46,3 +46,17 @@ Which is also compatible with other flags, like `-run`, that can be used to iter
 $ cmd -run -chat
 User> html for a bouncing ball
 ```
+
+## Configure
+
+You can check current configuration using `cmd -config`, and to change it use:
+* `-model` to set the model (use `-list-models` to see your options);
+* `-connectors` to set comma delimited connectors (use `-list-connectors` to see your options);
+* `-temperature` to set the temperature;
+* `-top-p` to set the top P;
+* `-top-k` to set the top K;
+* `-frequency-penalty` to set the frequency penalty;
+* `-presence-penalty` to set the presence penalty;
+```bash
+$ cmd -connectors web-search
+```

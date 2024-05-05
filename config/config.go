@@ -10,7 +10,8 @@ import (
 const configPath = ".cmd/config.json"
 
 type Config struct {
-	Model *string `json:"model,omitempty"`
+	Model      *string  `json:"model,omitempty"`
+	Connectors []string `json:"connectors,omitempty"`
 
 	// Sampling parameters
 	Temperature      *float64 `json:"temperature,omitempty"`

@@ -27,14 +27,16 @@ var (
 	cfg    *config.Config
 
 	// config flags
-	showConfig = flag.Bool("config", false, "Show current config.")
-	listModels = flag.Bool("list-models", false, "List available models.")
-	setModel   = flag.String("model", "", "Set model to use.")
-	setTemp    = flag.Float64("temp", 0.0, "Set temperature value.")
-	setTopP    = flag.Float64("top-p", 0.0, "Set top-p value.")
-	setTopK    = flag.Int("top-k", 0, "Set top-k value.")
-	setFreqPen = flag.Float64("freq-pen", 0.0, "Set frequency penalty value.")
-	setPresPen = flag.Float64("pres-pen", 0.0, "Set presence penalty value.")
+	showConfig     = flag.Bool("config", false, "Show current config.")
+	listModels     = flag.Bool("list-models", false, "List available models.")
+	setModel       = flag.String("model", "", "Set model to use.")
+	listConnectors = flag.Bool("list-connectors", false, "List available connectors.")
+	setConnectors  = flag.String("connectors", "", "Set connectors to use.")
+	setTemp        = flag.Float64("temperature", 0.0, "Set temperature value.")
+	setTopP        = flag.Float64("top-p", 0.0, "Set top-p value.")
+	setTopK        = flag.Int("top-k", 0, "Set top-k value.")
+	setFreqPen     = flag.Float64("frequency-penalty", 0.0, "Set frequency penalty value.")
+	setPresPen     = flag.Float64("presence-penalty", 0.0, "Set presence penalty value.")
 
 	chat    = flag.Bool("chat", false, "Start chat session with LLM, other flags apply.")
 	execute = flag.Bool("exec", false, "Execute generated command/code, do not show LLM output.")
@@ -90,7 +92,7 @@ func generate(
 	msgs []*co.ChatMessage,
 ) (string, error) {
 	buf := bytes.NewBuffer(nil)
-	stream, err := client.ChatStream(ctx, &co.ChatStreamRequest{
+	req := &co.ChatStreamRequest{
 		ChatHistory: msgs[:len(msgs)-1],
 		Message:     msgs[len(msgs)-1].Message,
 
@@ -100,7 +102,11 @@ func generate(
 		K:                cfg.TopK,
 		FrequencyPenalty: cfg.FrequencyPenalty,
 		PresencePenalty:  cfg.PresencePenalty,
-	})
+	}
+	for _, connector := range cfg.Connectors {
+		req.Connectors = append(req.Connectors, &co.ChatConnector{Id: connector})
+	}
+	stream, err := client.ChatStream(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -171,13 +177,33 @@ func parseConfig(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
+	if *listConnectors {
+		resp, err := client.Connectors.List(ctx, &co.ConnectorsListRequest{})
+		if err != nil {
+			return false, err
+		}
+		fmt.Println("Available connectors:")
+		for _, connector := range resp.Connectors {
+			fmt.Println(connector.Id)
+		}
+		fmt.Println()
+		fmt.Printf("Currently selected connectors: %s\n", cfg.Connectors)
+		return true, nil
+	}
+
 	dirtyCfg := false
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "model":
 			cfg.Model = setModel
 			dirtyCfg = true
-		case "temp":
+		case "connectors":
+			cfg.Connectors = strings.Split(*setConnectors, ",")
+			if *setConnectors == "" {
+				cfg.Connectors = nil
+			}
+			dirtyCfg = true
+		case "temperature":
 			cfg.Temperature = setTemp
 			dirtyCfg = true
 		case "top-p":
@@ -186,10 +212,10 @@ func parseConfig(ctx context.Context) (bool, error) {
 		case "top-k":
 			cfg.TopK = setTopK
 			dirtyCfg = true
-		case "freq-pen":
+		case "frequency-penalty":
 			cfg.FrequencyPenalty = setFreqPen
 			dirtyCfg = true
-		case "pres-pen":
+		case "presence-penalty":
 			cfg.PresencePenalty = setPresPen
 			dirtyCfg = true
 		}
