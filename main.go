@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -82,37 +83,48 @@ func runMessage(
 		return "", err
 	}
 
-	// TODO if *execute not set don't do this, since this will interleave with the stream
-	p := parser.NewCode()
-	codeBlocksCh := p.CodeBlocks()
-	go func() {
-		for block := range codeBlocksCh {
-			switch block.Lang {
-			case parser.Bash:
-				if err := runCmd("bash", "-c", block.Code); err != nil {
-					fmt.Println(err) // TODO
-				}
-			case parser.HTML:
-				path := fmt.Sprintf("%sindex.html", os.TempDir())
-				if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
-					fmt.Println(err) // TODO
-				}
-				if err := runCmd("open", fmt.Sprintf("file://%s", path)); err != nil {
-					fmt.Println(err) // TODO
+	var codeW io.WriteCloser
+	if *execute {
+		var blockCh <-chan *parser.CodeBlock
+		codeW, blockCh = parser.NewCode()
+		go func() {
+			for block := range blockCh {
+				switch block.Lang {
+				case parser.Bash:
+					if err := runCmd("bash", "-c", block.Code); err != nil {
+						fmt.Println(err) // TODO
+					}
+				case parser.HTML:
+					path := fmt.Sprintf("%sindex.html", os.TempDir())
+					if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
+						fmt.Println(err) // TODO
+					}
+					if err := runCmd("open", fmt.Sprintf("file://%s", path)); err != nil {
+						fmt.Println(err) // TODO
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 
-	rr := io.TeeReader(cohere.ReadFrom(stream), w)
-	_, err = io.Copy(p, rr)
+	buf := bytes.NewBuffer(nil)
+	// tee the stream to buffer to catch full output
+	river := io.TeeReader(cohere.ReadFrom(stream), buf)
+	if codeW != nil {
+		// tee the stream to code parser
+		river = io.TeeReader(river, codeW)
+	}
+	// write to actual output
+	_, err = io.Copy(w, river)
 	if err != nil {
 		return "", err
 	}
-	p.Close()
+	if codeW != nil {
+		codeW.Close()
+	}
 	stream.Close()
 	w.WriteString("\n")
-	return p.String(), nil
+	return buf.String(), nil
 }
 
 func runCmd(prog string, args ...string) error {

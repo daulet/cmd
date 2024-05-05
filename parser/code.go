@@ -38,18 +38,13 @@ type CodeBlock struct {
 }
 
 type Code struct {
-	// TODO maybe split with a TeeReader
-	// duplicate buffer to get all bytes in String()
-	b      []byte
-	data   chan []byte
-	blocks chan *CodeBlock
+	data chan []byte
 }
 
 var _ io.Writer = (*Code)(nil)
 var _ io.Closer = (*Code)(nil)
 
 func (c *Code) Write(p []byte) (n int, err error) {
-	c.b = append(c.b, p...)
 	c.data <- p
 	return len(p), nil
 }
@@ -67,10 +62,6 @@ func (c *Code) Read(p []byte) (n int, err error) {
 	}
 	// TODO what if len(p) < len(data)
 	return copy(p, data), nil
-}
-
-func (c *Code) CodeBlocks() <-chan *CodeBlock {
-	return c.blocks
 }
 
 func scanBlocks(r io.Reader, blocks chan<- *CodeBlock) {
@@ -97,19 +88,12 @@ func scanBlocks(r io.Reader, blocks chan<- *CodeBlock) {
 	}
 }
 
-func (c *Code) String() string {
-	return string(c.b)
-}
-
-// TODO without someone reading from here the whole reading/writing will block
-func NewCode() *Code {
-	buf := &Code{
-		data:   make(chan []byte),
-		blocks: make(chan *CodeBlock),
-	}
+func NewCode() (*Code, <-chan *CodeBlock) {
+	buf := &Code{data: make(chan []byte)}
+	blocks := make(chan *CodeBlock)
 	go func() {
-		defer close(buf.blocks)
-		scanBlocks(buf, buf.blocks)
+		defer close(blocks)
+		scanBlocks(buf, blocks)
 	}()
-	return buf
+	return buf, blocks
 }
