@@ -198,6 +198,12 @@ func parseConfig(ctx context.Context) (bool, error) {
 		if err := config.WriteConfig(cfg); err != nil {
 			return false, err
 		}
+		data, err := json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			return false, err
+		}
+		fmt.Println("Current config:")
+		fmt.Println(string(data))
 		return true, nil
 	}
 	return false, nil
