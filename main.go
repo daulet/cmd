@@ -22,7 +22,10 @@ const apiKeyEnvVar = "COHERE_API_KEY"
 var (
 	client *cocli.Client
 
-	chat    = flag.Bool("chat", false, "Chat with the AI")
+	chat = flag.Bool("chat", false, "Chat with the AI")
+	// TODO have separate flags for code and command execution
+	// with command you want right away
+	// with code (since it is longer) you want to see progress and execute later
 	execute = flag.Bool("exec", false, "Execute generated command/code")
 )
 
@@ -79,8 +82,29 @@ func runMessage(
 		return "", err
 	}
 
+	// TODO if *execute not set don't do this, since this will interleave with the stream
+	p := parser.NewBuffer()
+	codeBlocksCh := p.CodeBlocks()
+	go func() {
+		for block := range codeBlocksCh {
+			switch block.Lang {
+			case parser.Bash:
+				if err := runCmd("bash", "-c", block.Code); err != nil {
+					fmt.Println(err) // TODO
+				}
+			case parser.HTML:
+				path := fmt.Sprintf("%sindex.html", os.TempDir())
+				if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
+					fmt.Println(err) // TODO
+				}
+				if err := runCmd("open", fmt.Sprintf("file://%s", path)); err != nil {
+					fmt.Println(err) // TODO
+				}
+			}
+		}
+	}()
+
 	rr := io.TeeReader(cohere.ReadFrom(stream), w)
-	p := &parser.Buffer{}
 	_, err = io.Copy(p, rr)
 	if err != nil {
 		return "", err
@@ -90,27 +114,6 @@ func runMessage(
 
 	if !*execute {
 		return p.String(), nil
-	}
-
-	// TODO can execute once block is finished, not wait till the end of the stream
-	blocks := p.CodeBlocks()
-	if len(blocks) > 0 {
-		for _, block := range blocks {
-			switch block.Lang {
-			case parser.Bash:
-				if err := runCmd("bash", "-c", block.Code); err != nil {
-					return "", err
-				}
-			case parser.HTML:
-				path := fmt.Sprintf("%sindex.html", os.TempDir())
-				if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
-					return "", err
-				}
-				if err := runCmd("open", fmt.Sprintf("file://%s", path)); err != nil {
-					return "", err
-				}
-			}
-		}
 	}
 	return p.String(), nil
 }
