@@ -23,17 +23,18 @@ const apiKeyEnvVar = "COHERE_API_KEY"
 var (
 	client *cocli.Client
 
-	chat = flag.Bool("chat", false, "Chat with the AI")
-	// TODO have separate flags for code and command execution
-	// with command you want right away
-	// with code (since it is longer) you want to see progress and execute later
-	execute = flag.Bool("exec", false, "Execute generated command/code")
+	chat    = flag.Bool("chat", false, "Start chat session with LLM, other flags apply.")
+	execute = flag.Bool("exec", false, "Execute generated command/code, do not show LLM output.")
+	run     = flag.Bool("run", false, "Stream LLM output and run generated command/code at the end.")
 )
 
-func runChat(ctx context.Context, in io.Reader, out io.Writer) error {
+func converse(
+	ctx context.Context,
+	out io.WriteCloser,
+	in io.Reader,
+) error {
 	var (
 		r    = bufio.NewScanner(in)
-		w    = NewFlushingWriter(bufio.NewWriter(out))
 		msgs []*co.ChatMessage
 	)
 	for {
@@ -43,88 +44,70 @@ func runChat(ctx context.Context, in io.Reader, out io.Writer) error {
 		default:
 		}
 
-		w.WriteString("User> ")
+		out.Write([]byte("User> ")) // TODO does this polute the output?
 		if !r.Scan() {
 			return r.Err()
 		}
 		userMsg := r.Text()
 
-		response, err := runMessage(ctx, msgs, userMsg, w)
+		msgs = append(msgs,
+			&co.ChatMessage{
+				Role:    co.ChatMessageRoleUser,
+				Message: userMsg,
+			})
+
+		botMsg, err := generate(ctx, out, msgs)
 		if err != nil {
 			return err
 		}
 
 		msgs = append(msgs,
 			&co.ChatMessage{
-				Role:    co.ChatMessageRoleUser,
-				Message: userMsg,
-			},
-			&co.ChatMessage{
 				Role:    co.ChatMessageRoleChatbot,
-				Message: response,
+				Message: botMsg,
 			},
 		)
 	}
 }
 
-func runMessage(
+func generate(
 	ctx context.Context,
+	out io.WriteCloser,
 	msgs []*co.ChatMessage,
-	msg string,
-	out io.Writer,
 ) (string, error) {
-	w := NewFlushingWriter(bufio.NewWriter(out))
-
+	buf := bytes.NewBuffer(nil)
 	stream, err := client.ChatStream(ctx, &co.ChatStreamRequest{
-		ChatHistory: msgs,
-		Message:     msg,
+		ChatHistory: msgs[:len(msgs)-1],
+		Message:     msgs[len(msgs)-1].Message,
 	})
 	if err != nil {
 		return "", err
 	}
-
-	var codeW io.WriteCloser
-	if *execute {
-		var blockCh <-chan *parser.CodeBlock
-		codeW, blockCh = parser.NewCode()
-		go func() {
-			for block := range blockCh {
-				switch block.Lang {
-				case parser.Bash:
-					if err := runCmd("bash", "-c", block.Code); err != nil {
-						fmt.Println(err) // TODO
-					}
-				case parser.HTML:
-					path := fmt.Sprintf("%sindex.html", os.TempDir())
-					if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
-						fmt.Println(err) // TODO
-					}
-					if err := runCmd("open", fmt.Sprintf("file://%s", path)); err != nil {
-						fmt.Println(err) // TODO
-					}
-				}
-			}
-		}()
-	}
-
-	buf := bytes.NewBuffer(nil)
-	// tee the stream to buffer to catch full output
-	river := io.TeeReader(cohere.ReadFrom(stream), buf)
-	if codeW != nil {
-		// tee the stream to code parser
-		river = io.TeeReader(river, codeW)
-	}
-	// write to actual output
-	_, err = io.Copy(w, river)
+	_, err = io.Copy(parser.MultiWriter(out, buf), cohere.ReadFrom(stream))
 	if err != nil {
 		return "", err
 	}
-	if codeW != nil {
-		codeW.Close()
-	}
 	stream.Close()
-	w.WriteString("\n")
+	out.Write([]byte("\n"))
 	return buf.String(), nil
+}
+
+func runBlock(block *parser.CodeBlock) error {
+	switch block.Lang {
+	case parser.Bash:
+		if err := runCmd("bash", "-c", block.Code); err != nil {
+			return err
+		}
+	case parser.HTML:
+		path := fmt.Sprintf("%sindex.html", os.TempDir())
+		if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
+			return err
+		}
+		if err := runCmd("open", fmt.Sprintf("file://%s", path)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func runCmd(prog string, args ...string) error {
@@ -134,23 +117,68 @@ func runCmd(prog string, args ...string) error {
 	return cmd.Run()
 }
 
-func main() {
-	flag.Parse()
+func cmd() error {
 	ctx := context.Background()
+	done := make(chan struct{})
+
+	flag.Parse()
 	client = cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
+
+	var blocks []*parser.CodeBlock
+	var out io.WriteCloser
+	switch {
+	case *execute:
+		codeW, blockCh := parser.NewCode()
+		go func() {
+			defer close(done)
+			for block := range blockCh {
+				runBlock(block)
+			}
+		}()
+		// no output to the user, we just execute the code
+		out = codeW
+	case *run:
+		codeW, blockCh := parser.NewCode()
+		go func() {
+			defer close(done)
+			for block := range blockCh {
+				blocks = append(blocks, block)
+			}
+		}()
+		// we output generation to the user, then execute the code
+		out = parser.MultiWriter(codeW, os.Stdout)
+	default:
+		close(done)
+		// just output to the user
+		out = os.Stdout
+	}
 
 	var err error
 	switch {
 	case *chat:
-		err = runChat(ctx, os.Stdin, os.Stdout)
+		err = converse(ctx, out, os.Stdin)
 	default:
-		var out io.Writer = os.Stdout
-		if *execute {
-			out = io.Discard
-		}
-		_, err = runMessage(ctx, nil /* chat history */, strings.Join(flag.Args(), " "), out)
+		_, err = generate(ctx, out, []*co.ChatMessage{
+			{
+				Role:    co.ChatMessageRoleUser,
+				Message: strings.Join(flag.Args(), " ")},
+		})
 	}
 	if err != nil {
+		return err
+	}
+	out.Close()
+
+	<-done
+	for _, block := range blocks {
+		runBlock(block)
+	}
+
+	return nil
+}
+
+func main() {
+	if err := cmd(); err != nil {
 		panic(err)
 	}
 }
