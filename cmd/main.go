@@ -23,16 +23,19 @@ const apiKeyEnvVar = "COHERE_API_KEY"
 var (
 	client *cocli.Client
 
+	// config flags
+	listModels = flag.Bool("list-models", false, "List available models.")
+
 	chat    = flag.Bool("chat", false, "Start chat session with LLM, other flags apply.")
 	execute = flag.Bool("exec", false, "Execute generated command/code, do not show LLM output.")
 	run     = flag.Bool("run", false, "Stream LLM output and run generated command/code at the end.")
 )
 
-func converse(
+func multiTurn(
 	ctx context.Context,
 	out io.WriteCloser,
 	in io.Reader,
-	genFn func(context.Context, io.WriteCloser, []*co.ChatMessage) (string, error),
+	turnFn func(context.Context, io.WriteCloser, []*co.ChatMessage) (string, error),
 ) error {
 	var (
 		r    = bufio.NewScanner(in)
@@ -57,7 +60,7 @@ func converse(
 				Message: userMsg,
 			})
 
-		botMsg, err := genFn(ctx, out, msgs)
+		botMsg, err := turnFn(ctx, out, msgs)
 		if err != nil {
 			return err
 		}
@@ -124,7 +127,21 @@ func cmd() error {
 	flag.Parse()
 	client = cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
 
-	interact := func(ctx context.Context, out io.WriteCloser, msgs []*co.ChatMessage) (string, error) {
+	if *listModels {
+		resp, err := client.Models.List(ctx, &co.ModelsListRequest{
+			Endpoint: (*co.CompatibleEndpoint)(co.String(string(co.CompatibleEndpointChat))),
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Println("Available models:")
+		for _, model := range resp.Models {
+			fmt.Println(*model.Name)
+		}
+		return nil
+	}
+
+	turnFn := func(ctx context.Context, out io.WriteCloser, msgs []*co.ChatMessage) (string, error) {
 		var blocks []*parser.CodeBlock
 		done := make(chan struct{})
 
@@ -170,9 +187,9 @@ func cmd() error {
 	var err error
 	switch {
 	case *chat:
-		err = converse(ctx, os.Stdout, os.Stdin, interact)
+		err = multiTurn(ctx, os.Stdout, os.Stdin, turnFn)
 	default:
-		_, err = interact(ctx, os.Stdout, []*co.ChatMessage{
+		_, err = turnFn(ctx, os.Stdout, []*co.ChatMessage{
 			{
 				Role:    co.ChatMessageRoleUser,
 				Message: strings.Join(flag.Args(), " ")},
