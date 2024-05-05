@@ -279,21 +279,33 @@ func cmd(ctx context.Context) error {
 		return response, nil
 	}
 
+	var pipeContent string
+	// Check if there is input from the pipe (stdin)
+	if stat, _ := os.Stdin.Stat(); (stat.Mode() & os.ModeCharDevice) == 0 {
+		pipeBytes, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read from pipe: %w", err)
+		}
+		pipeContent = string(pipeBytes)
+	}
+
 	var err error
 	switch {
 	case *chat:
 		err = multiTurn(ctx, os.Stdout, os.Stdin, turnFn)
 	default:
+		usrMsg := strings.Join(flag.Args(), " ")
+		if pipeContent != "" {
+			usrMsg = fmt.Sprintf("%s\n%s", pipeContent, usrMsg)
+		}
 		_, err = turnFn(ctx, os.Stdout, []*co.ChatMessage{
 			{
 				Role:    co.ChatMessageRoleUser,
-				Message: strings.Join(flag.Args(), " ")},
+				Message: usrMsg,
+			},
 		})
 	}
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func main() {
