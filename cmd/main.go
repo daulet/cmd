@@ -31,7 +31,7 @@ var (
 	listModels     = flag.Bool("list-models", false, "List available models.")
 	setModel       = flag.String("model", "", "Set model to use.")
 	listConnectors = flag.Bool("list-connectors", false, "List available connectors.")
-	setConnectors  = flag.String("connectors", "", "Set connectors to use.")
+	setConnectors  = flag.String("connectors", "", "Set comma delimited list of connectors to use.")
 	setTemp        = flag.Float64("temperature", 0.0, "Set temperature value.")
 	setTopP        = flag.Float64("top-p", 0.0, "Set top-p value.")
 	setTopK        = flag.Int("top-k", 0, "Set top-k value.")
@@ -121,6 +121,19 @@ func generate(
 
 func runBlock(block *parser.CodeBlock) error {
 	switch block.Lang {
+	case parser.Go:
+		code := block.Code
+		// TODO remove when prompt engineering is there to add "make it runnable"
+		if !strings.HasPrefix(block.Code, "package") {
+			code = fmt.Sprintf("package main\n\n%s", block.Code)
+		}
+		path := fmt.Sprintf("%smain.go", os.TempDir())
+		if err := os.WriteFile(path, []byte(code), 0644); err != nil {
+			return err
+		}
+		if err := runCmd("go", "run", path); err != nil {
+			return err
+		}
 	case parser.Bash:
 		if err := runCmd("bash", "-c", block.Code); err != nil {
 			return err
@@ -131,6 +144,14 @@ func runBlock(block *parser.CodeBlock) error {
 			return err
 		}
 		if err := runCmd("open", fmt.Sprintf("file://%s", path)); err != nil {
+			return err
+		}
+	case parser.Python:
+		path := fmt.Sprintf("%smain.py", os.TempDir())
+		if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
+			return err
+		}
+		if err := runCmd("python", path); err != nil {
 			return err
 		}
 	}

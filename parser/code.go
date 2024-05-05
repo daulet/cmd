@@ -25,7 +25,7 @@ func language(s string) Language {
 		return Bash
 	case "html":
 		return HTML
-	case "python":
+	case "python", "python3":
 		return Python
 	default:
 		return Unknown

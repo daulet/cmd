@@ -9,7 +9,7 @@ Cmd is a versatile command-line tool that leverages AI to understand natural lan
 
 ## run code
 
-If you'd like to run the generated shell command or script, use `-run`:
+If you'd like to run the generated shell command or code, use `-run`:
 ```bash
 $ cmd -run print third last commit hash
 To print the third last commit hash, you can use the following Git command:
@@ -20,6 +20,7 @@ git log --pretty=format:"%H" -n 1 --skip 2
 This command will display the commit hash of the commit that is two commits before the most recent one. The `--pretty=format:"%H"` option specifies that you want to display the commit hash in the output, and the `-n 1` option limits the output to only one commit. The `--skip 2` option skips the two most recent commits and displays the hash of the third last commit.
 a200e6d429e2888344d7254ac02a00618ab432a2
 ```
+Supported languages include Go, Bash, Python and HTML. The language is assumed from identifier immediately following backticks of fenced code blocks, hence it could be error prone if no language is specified, or if code is broken down into multiple blocks (common for HTML).
 
 ## execute code
 
@@ -60,3 +61,23 @@ You can check current configuration using `cmd -config`, and to change it use:
 ```bash
 $ cmd -connectors web-search
 ```
+
+# Cool use cases
+
+## Read PDF document
+
+Pipe with xpdf (`brew install xpdf`) or similar:
+```bash
+$ pdftotext -nopgbrk -eol unix -q document.pdf - | cmd tldr
+```
+
+## Use web search
+
+Seemingly unrelated tasks could benefit from web search, e.g. here is a result of `cmd -run html for a bouncing ball`:
+
+![gif of a bouncing ball](./.github/ball.gif)
+
+and here is the result with web search enabled (`cmd -connectors web-search`):
+
+![gif of a bouncing ball](./.github/ball_web.gif)
+
