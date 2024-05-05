@@ -3,10 +3,12 @@ package main
 import (
 	"bufio"
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/daulet/llm-cli/cohere"
 	"github.com/daulet/llm-cli/parser"
@@ -17,7 +19,11 @@ import (
 
 const apiKeyEnvVar = "COHERE_API_KEY"
 
-func run(ctx context.Context, in io.Reader, out io.Writer) error {
+var (
+	chat = flag.Bool("chat", false, "Chat with the AI")
+)
+
+func runChat(ctx context.Context, in io.Reader, out io.Writer) error {
 	var (
 		r    = bufio.NewScanner(in)
 		w    = NewFlushingWriter(bufio.NewWriter(out))
@@ -36,37 +42,10 @@ func run(ctx context.Context, in io.Reader, out io.Writer) error {
 			return r.Err()
 		}
 		userMsg := r.Text()
-		stream, err := cl.ChatStream(ctx, &co.ChatStreamRequest{
-			ChatHistory: msgs,
-			Message:     userMsg,
-		})
+
+		response, err := runMessage(ctx, cl, msgs, userMsg, w)
 		if err != nil {
 			return err
-		}
-
-		rr := io.TeeReader(cohere.ReadFrom(stream), w)
-		p := &parser.Buffer{}
-		_, err = io.Copy(p, rr)
-		if err != nil {
-			return err
-		}
-		stream.Close()
-		w.WriteString("\n")
-
-		blocks := p.CodeBlocks()
-		if len(blocks) > 0 {
-			w.WriteString("Code blocks detected:\n")
-			for _, block := range blocks {
-				if block.Lang == parser.HTML {
-					path := fmt.Sprintf("%sindex.html", os.TempDir())
-					if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
-						return err
-					}
-					if err := runCmd("open", fmt.Sprintf("file://%s", path)); err != nil {
-						return err
-					}
-				}
-			}
 		}
 
 		msgs = append(msgs,
@@ -76,10 +55,54 @@ func run(ctx context.Context, in io.Reader, out io.Writer) error {
 			},
 			&co.ChatMessage{
 				Role:    co.ChatMessageRoleChatbot,
-				Message: p.String(),
+				Message: response,
 			},
 		)
 	}
+}
+
+func runMessage(
+	ctx context.Context,
+	cl *cocli.Client,
+	msgs []*co.ChatMessage,
+	msg string,
+	out io.Writer,
+) (string, error) {
+	w := NewFlushingWriter(bufio.NewWriter(out))
+
+	stream, err := cl.ChatStream(ctx, &co.ChatStreamRequest{
+		ChatHistory: msgs,
+		Message:     msg,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	rr := io.TeeReader(cohere.ReadFrom(stream), w)
+	p := &parser.Buffer{}
+	_, err = io.Copy(p, rr)
+	if err != nil {
+		return "", err
+	}
+	stream.Close()
+	w.WriteString("\n")
+
+	blocks := p.CodeBlocks()
+	if len(blocks) > 0 {
+		w.WriteString("Code blocks detected:\n")
+		for _, block := range blocks {
+			if block.Lang == parser.HTML {
+				path := fmt.Sprintf("%sindex.html", os.TempDir())
+				if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
+					return "", err
+				}
+				if err := runCmd("open", fmt.Sprintf("file://%s", path)); err != nil {
+					return "", err
+				}
+			}
+		}
+	}
+	return p.String(), nil
 }
 
 func runCmd(prog string, args ...string) error {
@@ -90,8 +113,17 @@ func runCmd(prog string, args ...string) error {
 }
 
 func main() {
+	flag.Parse()
 	ctx := context.Background()
-	if err := run(ctx, os.Stdin, os.Stdout); err != nil {
-		panic(err)
+	switch {
+	case *chat:
+		if err := runChat(ctx, os.Stdin, os.Stdout); err != nil {
+			panic(err)
+		}
+	default:
+		cl := cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
+		if _, err := runMessage(ctx, cl, nil /* chat history */, strings.Join(os.Args[1:], " "), os.Stdout); err != nil {
+			panic(err)
+		}
 	}
 }
