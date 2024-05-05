@@ -83,7 +83,7 @@ func runMessage(
 	}
 
 	// TODO if *execute not set don't do this, since this will interleave with the stream
-	p := parser.NewBuffer()
+	p := parser.NewCode()
 	codeBlocksCh := p.CodeBlocks()
 	go func() {
 		for block := range codeBlocksCh {

@@ -37,7 +37,7 @@ type CodeBlock struct {
 	Code string
 }
 
-type Buffer struct {
+type Code struct {
 	// TODO maybe split with a TeeReader
 	// duplicate buffer to get all bytes in String()
 	b      []byte
@@ -45,22 +45,22 @@ type Buffer struct {
 	blocks chan *CodeBlock
 }
 
-var _ io.Writer = (*Buffer)(nil)
-var _ io.Closer = (*Buffer)(nil)
+var _ io.Writer = (*Code)(nil)
+var _ io.Closer = (*Code)(nil)
 
-func (c *Buffer) Write(p []byte) (n int, err error) {
+func (c *Code) Write(p []byte) (n int, err error) {
 	c.b = append(c.b, p...)
 	c.data <- p
 	return len(p), nil
 }
 
-func (c *Buffer) Close() error {
+func (c *Code) Close() error {
 	close(c.data)
 	return nil
 }
 
 // Read to implement io.Reader so we can use bufio.Scanner
-func (c *Buffer) Read(p []byte) (n int, err error) {
+func (c *Code) Read(p []byte) (n int, err error) {
 	data, ok := <-c.data
 	if !ok {
 		return 0, io.EOF
@@ -69,7 +69,7 @@ func (c *Buffer) Read(p []byte) (n int, err error) {
 	return copy(p, data), nil
 }
 
-func (c *Buffer) CodeBlocks() <-chan *CodeBlock {
+func (c *Code) CodeBlocks() <-chan *CodeBlock {
 	return c.blocks
 }
 
@@ -97,13 +97,13 @@ func scanBlocks(r io.Reader, blocks chan<- *CodeBlock) {
 	}
 }
 
-func (c *Buffer) String() string {
+func (c *Code) String() string {
 	return string(c.b)
 }
 
 // TODO without someone reading from here the whole reading/writing will block
-func NewBuffer() *Buffer {
-	buf := &Buffer{
+func NewCode() *Code {
+	buf := &Code{
 		data:   make(chan []byte),
 		blocks: make(chan *CodeBlock),
 	}
