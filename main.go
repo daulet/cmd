@@ -109,12 +109,9 @@ func runMessage(
 	if err != nil {
 		return "", err
 	}
+	p.Close()
 	stream.Close()
 	w.WriteString("\n")
-
-	if !*execute {
-		return p.String(), nil
-	}
 	return p.String(), nil
 }
 
