@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/daulet/llm-cli/cohere"
+	"github.com/daulet/llm-cli/config"
 	"github.com/daulet/llm-cli/parser"
 
 	co "github.com/cohere-ai/cohere-go/v2"
@@ -22,9 +24,17 @@ const apiKeyEnvVar = "COHERE_API_KEY"
 
 var (
 	client *cocli.Client
+	cfg    *config.Config
 
 	// config flags
+	showConfig = flag.Bool("config", false, "Show current config.")
 	listModels = flag.Bool("list-models", false, "List available models.")
+	setModel   = flag.String("model", "", "Set model to use.")
+	setTemp    = flag.Float64("temp", 0.0, "Set temperature value.")
+	setTopP    = flag.Float64("top-p", 0.0, "Set top-p value.")
+	setTopK    = flag.Int("top-k", 0, "Set top-k value.")
+	setFreqPen = flag.Float64("freq-pen", 0.0, "Set frequency penalty value.")
+	setPresPen = flag.Float64("pres-pen", 0.0, "Set presence penalty value.")
 
 	chat    = flag.Bool("chat", false, "Start chat session with LLM, other flags apply.")
 	execute = flag.Bool("exec", false, "Execute generated command/code, do not show LLM output.")
@@ -83,6 +93,13 @@ func generate(
 	stream, err := client.ChatStream(ctx, &co.ChatStreamRequest{
 		ChatHistory: msgs[:len(msgs)-1],
 		Message:     msgs[len(msgs)-1].Message,
+
+		Model:            cfg.Model,
+		Temperature:      cfg.Temperature,
+		P:                cfg.TopP,
+		K:                cfg.TopK,
+		FrequencyPenalty: cfg.FrequencyPenalty,
+		PresencePenalty:  cfg.PresencePenalty,
 	})
 	if err != nil {
 		return "", err
@@ -121,26 +138,72 @@ func runCmd(prog string, args ...string) error {
 	return cmd.Run()
 }
 
-func cmd() error {
-	ctx := context.Background()
+func parseConfig(ctx context.Context) (bool, error) {
+	var err error
+	cfg, err = config.ReadConfig()
+	if err != nil {
+		return false, err
+	}
 
-	flag.Parse()
-	client = cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
+	if *showConfig {
+		data, err := json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			return false, err
+		}
+		fmt.Println("Current config:")
+		fmt.Println(string(data))
+		return true, nil
+	}
 
 	if *listModels {
 		resp, err := client.Models.List(ctx, &co.ModelsListRequest{
 			Endpoint: (*co.CompatibleEndpoint)(co.String(string(co.CompatibleEndpointChat))),
 		})
 		if err != nil {
-			return err
+			return false, err
 		}
 		fmt.Println("Available models:")
 		for _, model := range resp.Models {
 			fmt.Println(*model.Name)
 		}
-		return nil
+		fmt.Println()
+		fmt.Printf("Currently selected model: %s\n", *cfg.Model)
+		return true, nil
 	}
 
+	dirtyCfg := false
+	flag.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "model":
+			cfg.Model = setModel
+			dirtyCfg = true
+		case "temp":
+			cfg.Temperature = setTemp
+			dirtyCfg = true
+		case "top-p":
+			cfg.TopP = setTopP
+			dirtyCfg = true
+		case "top-k":
+			cfg.TopK = setTopK
+			dirtyCfg = true
+		case "freq-pen":
+			cfg.FrequencyPenalty = setFreqPen
+			dirtyCfg = true
+		case "pres-pen":
+			cfg.PresencePenalty = setPresPen
+			dirtyCfg = true
+		}
+	})
+	if dirtyCfg {
+		if err := config.WriteConfig(cfg); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func cmd(ctx context.Context) error {
 	turnFn := func(ctx context.Context, out io.WriteCloser, msgs []*co.ChatMessage) (string, error) {
 		var blocks []*parser.CodeBlock
 		done := make(chan struct{})
@@ -202,7 +265,19 @@ func cmd() error {
 }
 
 func main() {
-	if err := cmd(); err != nil {
+	flag.Parse()
+
+	client = cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
+
+	ctx := context.Background()
+	done, err := parseConfig(ctx)
+	if err != nil {
+		panic(err)
+	}
+	if done {
+		return
+	}
+	if err := cmd(ctx); err != nil {
 		panic(err)
 	}
 }
