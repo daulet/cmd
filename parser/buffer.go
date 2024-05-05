@@ -12,6 +12,7 @@ type Language int
 const (
 	Unknown Language = iota
 	Go
+	Bash
 	HTML
 	Python
 )
@@ -20,6 +21,8 @@ func language(s string) Language {
 	switch s {
 	case "go":
 		return Go
+	case "bash":
+		return Bash
 	case "html":
 		return HTML
 	case "python":

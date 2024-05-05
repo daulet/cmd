@@ -22,7 +22,8 @@ const apiKeyEnvVar = "COHERE_API_KEY"
 var (
 	client *cocli.Client
 
-	chat = flag.Bool("chat", false, "Chat with the AI")
+	chat    = flag.Bool("chat", false, "Chat with the AI")
+	execute = flag.Bool("exec", false, "Execute generated command/code")
 )
 
 func runChat(ctx context.Context, in io.Reader, out io.Writer) error {
@@ -87,11 +88,20 @@ func runMessage(
 	stream.Close()
 	w.WriteString("\n")
 
+	if !*execute {
+		return p.String(), nil
+	}
+
+	// TODO can execute once block is finished, not wait till the end of the stream
 	blocks := p.CodeBlocks()
 	if len(blocks) > 0 {
-		w.WriteString("Code blocks detected:\n")
 		for _, block := range blocks {
-			if block.Lang == parser.HTML {
+			switch block.Lang {
+			case parser.Bash:
+				if err := runCmd("bash", "-c", block.Code); err != nil {
+					return "", err
+				}
+			case parser.HTML:
 				path := fmt.Sprintf("%sindex.html", os.TempDir())
 				if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
 					return "", err
@@ -122,9 +132,13 @@ func main() {
 	case *chat:
 		err = runChat(ctx, os.Stdin, os.Stdout)
 	default:
-		_, err = runMessage(ctx, nil /* chat history */, strings.Join(os.Args[1:], " "), os.Stdout)
+		var out io.Writer = os.Stdout
+		if *execute {
+			out = io.Discard
+		}
+		_, err = runMessage(ctx, nil /* chat history */, strings.Join(flag.Args(), " "), out)
 	}
 	if err != nil {
-			panic(err)
+		panic(err)
 	}
 }
