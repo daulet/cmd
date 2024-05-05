@@ -20,6 +20,8 @@ import (
 const apiKeyEnvVar = "COHERE_API_KEY"
 
 var (
+	client *cocli.Client
+
 	chat = flag.Bool("chat", false, "Chat with the AI")
 )
 
@@ -27,7 +29,6 @@ func runChat(ctx context.Context, in io.Reader, out io.Writer) error {
 	var (
 		r    = bufio.NewScanner(in)
 		w    = NewFlushingWriter(bufio.NewWriter(out))
-		cl   = cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
 		msgs []*co.ChatMessage
 	)
 	for {
@@ -43,7 +44,7 @@ func runChat(ctx context.Context, in io.Reader, out io.Writer) error {
 		}
 		userMsg := r.Text()
 
-		response, err := runMessage(ctx, cl, msgs, userMsg, w)
+		response, err := runMessage(ctx, msgs, userMsg, w)
 		if err != nil {
 			return err
 		}
@@ -63,14 +64,13 @@ func runChat(ctx context.Context, in io.Reader, out io.Writer) error {
 
 func runMessage(
 	ctx context.Context,
-	cl *cocli.Client,
 	msgs []*co.ChatMessage,
 	msg string,
 	out io.Writer,
 ) (string, error) {
 	w := NewFlushingWriter(bufio.NewWriter(out))
 
-	stream, err := cl.ChatStream(ctx, &co.ChatStreamRequest{
+	stream, err := client.ChatStream(ctx, &co.ChatStreamRequest{
 		ChatHistory: msgs,
 		Message:     msg,
 	})
@@ -115,15 +115,16 @@ func runCmd(prog string, args ...string) error {
 func main() {
 	flag.Parse()
 	ctx := context.Background()
+	client = cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
+
+	var err error
 	switch {
 	case *chat:
-		if err := runChat(ctx, os.Stdin, os.Stdout); err != nil {
-			panic(err)
-		}
+		err = runChat(ctx, os.Stdin, os.Stdout)
 	default:
-		cl := cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
-		if _, err := runMessage(ctx, cl, nil /* chat history */, strings.Join(os.Args[1:], " "), os.Stdout); err != nil {
+		_, err = runMessage(ctx, nil /* chat history */, strings.Join(os.Args[1:], " "), os.Stdout)
+	}
+	if err != nil {
 			panic(err)
-		}
 	}
 }
