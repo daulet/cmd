@@ -32,6 +32,7 @@ func converse(
 	ctx context.Context,
 	out io.WriteCloser,
 	in io.Reader,
+	genFn func(context.Context, io.WriteCloser, []*co.ChatMessage) (string, error),
 ) error {
 	var (
 		r    = bufio.NewScanner(in)
@@ -56,7 +57,7 @@ func converse(
 				Message: userMsg,
 			})
 
-		botMsg, err := generate(ctx, out, msgs)
+		botMsg, err := genFn(ctx, out, msgs)
 		if err != nil {
 			return err
 		}
@@ -119,46 +120,59 @@ func runCmd(prog string, args ...string) error {
 
 func cmd() error {
 	ctx := context.Background()
-	done := make(chan struct{})
 
 	flag.Parse()
 	client = cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
 
-	var blocks []*parser.CodeBlock
-	var out io.WriteCloser
-	switch {
-	case *execute:
-		codeW, blockCh := parser.NewCode()
-		go func() {
-			defer close(done)
-			for block := range blockCh {
-				runBlock(block)
-			}
-		}()
-		// no output to the user, we just execute the code
-		out = codeW
-	case *run:
-		codeW, blockCh := parser.NewCode()
-		go func() {
-			defer close(done)
-			for block := range blockCh {
-				blocks = append(blocks, block)
-			}
-		}()
-		// we output generation to the user, then execute the code
-		out = parser.MultiWriter(codeW, os.Stdout)
-	default:
-		close(done)
-		// just output to the user
-		out = os.Stdout
+	interact := func(ctx context.Context, out io.WriteCloser, msgs []*co.ChatMessage) (string, error) {
+		var blocks []*parser.CodeBlock
+		done := make(chan struct{})
+
+		switch {
+		case *execute:
+			codeW, blockCh := parser.NewCode()
+			go func() {
+				defer close(done)
+				for block := range blockCh {
+					runBlock(block)
+				}
+			}()
+			// no output to the user, we just execute the code
+			out = codeW
+		case *run:
+			codeW, blockCh := parser.NewCode()
+			go func() {
+				defer close(done)
+				for block := range blockCh {
+					blocks = append(blocks, block)
+				}
+			}()
+			// we output generation to the user, then execute the code
+			out = parser.MultiWriter(codeW, out)
+		default:
+			close(done)
+		}
+
+		response, err := generate(ctx, out, msgs)
+		if err != nil {
+			return "", err
+		}
+
+		out.Close()
+		<-done
+		for _, block := range blocks {
+			runBlock(block)
+		}
+
+		return response, nil
 	}
 
 	var err error
 	switch {
 	case *chat:
-		err = converse(ctx, out, os.Stdin)
+		err = converse(ctx, os.Stdout, os.Stdin, interact)
 	default:
-		_, err = generate(ctx, out, []*co.ChatMessage{
+		_, err = interact(ctx, os.Stdout, []*co.ChatMessage{
 			{
 				Role:    co.ChatMessageRoleUser,
 				Message: strings.Join(flag.Args(), " ")},
@@ -167,13 +181,6 @@ func cmd() error {
 	if err != nil {
 		return err
 	}
-	out.Close()
-
-	<-done
-	for _, block := range blocks {
-		runBlock(block)
-	}
-
 	return nil
 }
 

@@ -1,7 +1,7 @@
 
 # cmd
 
-Most common usage is pass in your message as an argument to the command:
+Most common usage is to pass to your message as an argument:
 ```bash
 $ cmd hi
 Hello! How can I help you today?
@@ -35,14 +35,14 @@ d42893c (HEAD -> main, origin/main) simplify code parser, make exec truly option
 
 ## chat
 
-To start a chat session use `-chat`:
+To start a multi turn chat session use `-chat`:
 ```bash
 $ cmd -chat
 User> (your message)
 ```
 
-which is also compatible with other flags, like `-run`:
+Which is also compatible with other flags, like `-run`, that can be used to iterate on a solution:
 ```bash
 $ cmd -run -chat
-User > 
+User> html for a bouncing ball
 ```
