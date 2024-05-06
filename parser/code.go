@@ -39,13 +39,16 @@ type CodeBlock struct {
 
 type Code struct {
 	data chan []byte
+	buf  []byte
 }
 
-var _ io.Writer = (*Code)(nil)
-var _ io.Closer = (*Code)(nil)
+var _ io.WriteCloser = (*Code)(nil)
 
-func (c *Code) Write(p []byte) (n int, err error) {
-	c.data <- p
+func (c *Code) Write(p []byte) (int, error) {
+	// don't reuse p since it could be reused by the caller
+	cp := make([]byte, len(p))
+	copy(cp, p)
+	c.data <- cp
 	return len(p), nil
 }
 
@@ -55,13 +58,25 @@ func (c *Code) Close() error {
 }
 
 // Read to implement io.Reader so we can use bufio.Scanner
-func (c *Code) Read(p []byte) (n int, err error) {
+func (c *Code) Read(p []byte) (int, error) {
+	if len(c.buf) > 0 {
+		n := copy(p, c.buf)
+		if n < len(c.buf) {
+			c.buf = c.buf[n:]
+			return n, nil
+		}
+		c.buf = nil
+		return n, nil
+	}
 	data, ok := <-c.data
 	if !ok {
 		return 0, io.EOF
 	}
-	// TODO what if len(p) < len(data)
-	return copy(p, data), nil
+	n := copy(p, data)
+	if n < len(data) {
+		c.buf = data[n:]
+	}
+	return n, nil
 }
 
 func scanBlocks(r io.Reader, blocks chan<- *CodeBlock) {
