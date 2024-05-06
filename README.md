@@ -81,3 +81,45 @@ and here is the result with web search enabled (`cmd -connectors web-search`):
 
 ![gif of a bouncing ball](./.github/ball_web.gif)
 
+## Data transformation
+
+A common mundane task that this tool could simplify is transforming or otherwise parsing data from one format to another. However, there are multiple ways to approach this, e.g. you could ask LLM to transform the data directly, or you could ask cmd to write a program to transform the data. The better solution depends on the amount of data you have, and the complexity of the transformation.
+```bash
+cat house-prices.csv | cmd convert to json
+```json
+[
+    {
+        "Home": 1,
+        "Price": 114300,
+        "SqFt": 1790,
+        "Bedrooms": 2,
+        "Bathrooms": 2,
+        "Offers": 2,
+        "Brick": "No",
+        "Neighborhood": "East"
+    },
+    { ...
+```
+
+Programmatic approach (program is still written by LLM):
+```bash
+cat house-prices.csv | cmd -exec write python program to convert this to json and read the data from house-prices.csv
+[
+    {
+        "Home": "1",
+        "Price": "114300",
+        "SqFt": "1790",
+        "Bedrooms": "2",
+        "Bathrooms": "2",
+        "Offers": "2",
+        "Brick": "No",
+        "Neighborhood": "East"
+    },
+    { ...
+```
+
+Of course whichever approach you choose, you can always pipe the output to another command to further process it.
+
+```bash
+cat house-prices.csv | cmd -exec write python program to convert this to json and print it out, read the data from house-prices.csv | cmd -run run python program to plot this data
+```
