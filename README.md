@@ -7,6 +7,12 @@ cat README.md | cmd briefly describe functionality
 Cmd is a versatile command-line tool that leverages AI to understand natural language input and generate shell commands or even entire scripts. It offers various flags to enhance its functionality. You can use `-run` to execute the generated command and display the output, while `-exec` executes the command without showing the generation process or output. For multi-turn interactions, there's `-chat`, and you can configure the model, connectors, and other settings with `-config` and related flags. Additionally, content can be piped into cmd for quick processing.
 ```
 
+## Install
+
+```bash
+$ brew tap daulet/cmd && brew install cmd
+```
+
 ## run code
 
 If you'd like to run the generated shell command or code, use `-run`:
