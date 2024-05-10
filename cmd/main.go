@@ -309,16 +309,19 @@ func cmd(ctx context.Context) error {
 		}
 		pipeContent = string(pipeBytes)
 	}
+	if flag.NArg() == 0 && pipeContent == "" {
+		return fmt.Errorf("what's your command?")
+	}
+	usrMsg := strings.Join(flag.Args(), " ")
+	if pipeContent != "" {
+		usrMsg = fmt.Sprintf("%s\n%s", pipeContent, usrMsg)
+	}
 
 	var err error
 	switch {
 	case *chat:
 		err = multiTurn(ctx, os.Stdout, os.Stdin, turnFn)
 	default:
-		usrMsg := strings.Join(flag.Args(), " ")
-		if pipeContent != "" {
-			usrMsg = fmt.Sprintf("%s\n%s", pipeContent, usrMsg)
-		}
 		_, err = turnFn(ctx, os.Stdout, []*co.ChatMessage{
 			{
 				Role:    co.ChatMessageRoleUser,
@@ -343,6 +346,7 @@ func main() {
 		return
 	}
 	if err := cmd(ctx); err != nil {
-		panic(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 }
