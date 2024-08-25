@@ -5,6 +5,7 @@ import (
 	"os"
 )
 
+// multiWriter exists because std doesn't implement Closer
 type multiWriter struct {
 	writers []io.Writer
 }

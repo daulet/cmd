@@ -15,16 +15,13 @@ import (
 	"github.com/daulet/llm-cli/cohere"
 	"github.com/daulet/llm-cli/config"
 	"github.com/daulet/llm-cli/parser"
-
-	co "github.com/cohere-ai/cohere-go/v2"
-	cocli "github.com/cohere-ai/cohere-go/v2/client"
 )
 
 const apiKeyEnvVar = "COHERE_API_KEY"
 
 var (
-	client *cocli.Client
-	cfg    *config.Config
+	provider cohere.Provider
+	cfg      *config.Config
 
 	// config flags
 	showConfig     = flag.Bool("config", false, "Show current config.")
@@ -47,11 +44,11 @@ func multiTurn(
 	ctx context.Context,
 	out io.WriteCloser,
 	in io.Reader,
-	turnFn func(context.Context, io.WriteCloser, []*co.ChatMessage) (string, error),
+	turnFn func(context.Context, io.WriteCloser, []*cohere.Message) (string, error),
 ) error {
 	var (
 		r    = bufio.NewScanner(in)
-		msgs []*co.ChatMessage
+		msgs []*cohere.Message
 	)
 	for {
 		select {
@@ -67,9 +64,9 @@ func multiTurn(
 		userMsg := r.Text()
 
 		msgs = append(msgs,
-			&co.ChatMessage{
-				Role:    co.ChatMessageRoleUser,
-				Message: userMsg,
+			&cohere.Message{
+				Role:    cohere.User,
+				Content: userMsg,
 			})
 
 		botMsg, err := turnFn(ctx, out, msgs)
@@ -78,9 +75,9 @@ func multiTurn(
 		}
 
 		msgs = append(msgs,
-			&co.ChatMessage{
-				Role:    co.ChatMessageRoleChatbot,
-				Message: botMsg,
+			&cohere.Message{
+				Role:    cohere.Assistant,
+				Content: botMsg,
 			},
 		)
 	}
@@ -89,32 +86,17 @@ func multiTurn(
 func generate(
 	ctx context.Context,
 	out io.WriteCloser,
-	msgs []*co.ChatMessage,
+	msgs []*cohere.Message,
 ) (string, error) {
+	reader, err := provider.Stream(ctx, cfg, msgs)
+	if err != nil {
+		return "", err
+	}
 	buf := bytes.NewBuffer(nil)
-	req := &co.ChatStreamRequest{
-		ChatHistory: msgs[:len(msgs)-1],
-		Message:     msgs[len(msgs)-1].Message,
-
-		Model:            cfg.Model,
-		Temperature:      cfg.Temperature,
-		P:                cfg.TopP,
-		K:                cfg.TopK,
-		FrequencyPenalty: cfg.FrequencyPenalty,
-		PresencePenalty:  cfg.PresencePenalty,
-	}
-	for _, connector := range cfg.Connectors {
-		req.Connectors = append(req.Connectors, &co.ChatConnector{Id: connector})
-	}
-	stream, err := client.ChatStream(ctx, req)
+	_, err = io.Copy(parser.MultiWriter(out, buf), reader)
 	if err != nil {
 		return "", err
 	}
-	_, err = io.Copy(parser.MultiWriter(out, buf), cohere.ReadFrom(stream))
-	if err != nil {
-		return "", err
-	}
-	stream.Close()
 	out.Write([]byte("\n"))
 	return buf.String(), nil
 }
@@ -183,15 +165,13 @@ func parseConfig(ctx context.Context) (bool, error) {
 	}
 
 	if *listModels {
-		resp, err := client.Models.List(ctx, &co.ModelsListRequest{
-			Endpoint: (*co.CompatibleEndpoint)(co.String(string(co.CompatibleEndpointChat))),
-		})
+		modelNames, err := provider.ListModels(ctx)
 		if err != nil {
 			return false, err
 		}
 		fmt.Println("Available models:")
-		for _, model := range resp.Models {
-			fmt.Println(*model.Name)
+		for _, model := range modelNames {
+			fmt.Println(model)
 		}
 		fmt.Println()
 		fmt.Printf("Currently selected model: %s\n", *cfg.Model)
@@ -199,13 +179,13 @@ func parseConfig(ctx context.Context) (bool, error) {
 	}
 
 	if *listConnectors {
-		resp, err := client.Connectors.List(ctx, &co.ConnectorsListRequest{})
+		connectorIDs, err := provider.ListConnectors(ctx)
 		if err != nil {
 			return false, err
 		}
 		fmt.Println("Available connectors:")
-		for _, connector := range resp.Connectors {
-			fmt.Println(connector.Id)
+		for _, connectorID := range connectorIDs {
+			fmt.Println(connectorID)
 		}
 		fmt.Println()
 		fmt.Printf("Currently selected connectors: %s\n", cfg.Connectors)
@@ -257,7 +237,7 @@ func parseConfig(ctx context.Context) (bool, error) {
 }
 
 func cmd(ctx context.Context) error {
-	turnFn := func(ctx context.Context, out io.WriteCloser, msgs []*co.ChatMessage) (string, error) {
+	turnFn := func(ctx context.Context, out io.WriteCloser, msgs []*cohere.Message) (string, error) {
 		var blocks []*parser.CodeBlock
 		done := make(chan struct{})
 
@@ -322,10 +302,10 @@ func cmd(ctx context.Context) error {
 	case *chat:
 		err = multiTurn(ctx, os.Stdout, os.Stdin, turnFn)
 	default:
-		_, err = turnFn(ctx, os.Stdout, []*co.ChatMessage{
+		_, err = turnFn(ctx, os.Stdout, []*cohere.Message{
 			{
-				Role:    co.ChatMessageRoleUser,
-				Message: usrMsg,
+				Role:    cohere.User,
+				Content: usrMsg,
 			},
 		})
 	}
@@ -335,7 +315,7 @@ func cmd(ctx context.Context) error {
 func main() {
 	flag.Parse()
 
-	client = cocli.NewClient(cocli.WithToken(os.Getenv(apiKeyEnvVar)))
+	provider = cohere.NewCohereProvider(os.Getenv(apiKeyEnvVar))
 
 	ctx := context.Background()
 	done, err := parseConfig(ctx)
