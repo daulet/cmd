@@ -1,4 +1,4 @@
-package cohere
+package provider
 
 import (
 	"io"
