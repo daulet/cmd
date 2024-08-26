@@ -9,13 +9,14 @@ import (
 
 	co "github.com/cohere-ai/cohere-go/v2"
 	cocli "github.com/cohere-ai/cohere-go/v2/client"
+	core "github.com/cohere-ai/cohere-go/v2/core"
 )
-
-var _ Provider = (*CohereProvider)(nil)
 
 func NewCohereProvider(apiKey string) *CohereProvider {
 	return &CohereProvider{client: cocli.NewClient(cocli.WithToken(apiKey))}
 }
+
+var _ Provider = (*CohereProvider)(nil)
 
 type CohereProvider struct {
 	client *cocli.Client
@@ -58,7 +59,7 @@ func (p *CohereProvider) Stream(ctx context.Context, cfg *config.Config, msgs []
 		return nil, err
 	}
 	// TODO stream.Close()
-	return ReadFrom(stream), nil
+	return &cohereStreamReader{stream: stream}, nil
 }
 
 func (p *CohereProvider) ListModels(ctx context.Context) ([]string, error) {
@@ -85,4 +86,36 @@ func (p *CohereProvider) ListConnectors(ctx context.Context) ([]string, error) {
 		connectorNames = append(connectorNames, connector.Id)
 	}
 	return connectorNames, nil
+}
+
+type cohereStreamReader struct {
+	stream *core.Stream[co.StreamedChatResponse]
+	buf    []byte
+}
+
+var _ io.Reader = (*cohereStreamReader)(nil)
+
+func (r *cohereStreamReader) Read(p []byte) (int, error) {
+	if len(r.buf) > 0 {
+		n := copy(p, r.buf)
+		if n < len(r.buf) {
+			r.buf = r.buf[n:]
+			return n, nil
+		}
+		r.buf = nil
+		return n, nil
+	}
+	resp, err := r.stream.Recv()
+	if err != nil {
+		return 0, err
+	}
+	if resp.TextGeneration == nil {
+		return 0, nil
+	}
+	out := []byte(resp.TextGeneration.Text)
+	n := copy(p, out)
+	if n < len(out) {
+		r.buf = out[n:]
+	}
+	return n, nil
 }

@@ -9,7 +9,14 @@ import (
 
 const configPath = ".cmd/config.json"
 
+const (
+	ProviderGroq   = "groq"
+	ProviderCohere = "cohere"
+)
+
 type Config struct {
+	Provider string `json:"provider,omitempty"`
+
 	Model      *string  `json:"model,omitempty"`
 	Connectors []string `json:"connectors,omitempty"`
 
@@ -26,7 +33,11 @@ func ReadConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg := &Config{}
+	cfg := &Config{
+		// default to groq
+		Provider: ProviderGroq,
+		Model:    ref("llama-3.1-8b-instant"),
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		// no config file, return default config
@@ -59,4 +70,8 @@ func ConfigPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(homeDir, configPath), nil
+}
+
+func ref(v string) *string {
+	return &v
 }

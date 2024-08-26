@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -17,7 +18,10 @@ import (
 	"github.com/daulet/llm-cli/provider"
 )
 
-const apiKeyEnvVar = "COHERE_API_KEY"
+const (
+	COHERE_API_KEY = "COHERE_API_KEY"
+	GROQ_API_KEY   = "GROQ_API_KEY"
+)
 
 var (
 	prov provider.Provider
@@ -101,6 +105,7 @@ func generate(
 	return buf.String(), nil
 }
 
+// TODO return correct exit code when -run or -exec fails
 func runBlock(block *parser.CodeBlock) error {
 	switch block.Lang {
 	case parser.Go:
@@ -315,8 +320,6 @@ func cmd(ctx context.Context) error {
 func main() {
 	flag.Parse()
 
-	prov = provider.NewCohereProvider(os.Getenv(apiKeyEnvVar))
-
 	ctx := context.Background()
 	done, err := parseConfig(ctx)
 	if err != nil {
@@ -325,6 +328,16 @@ func main() {
 	if done {
 		return
 	}
+
+	switch cfg.Provider {
+	case config.ProviderGroq:
+		prov = provider.NewGroqProvider(os.Getenv(GROQ_API_KEY))
+	case config.ProviderCohere:
+		prov = provider.NewCohereProvider(os.Getenv(COHERE_API_KEY))
+	default:
+		log.Fatalf("unknown provider: %s", cfg.Provider)
+	}
+
 	if err := cmd(ctx); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
