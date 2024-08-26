@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -64,7 +65,7 @@ func (c *cacheProvider) Transcribe(ctx context.Context, cfg *config.Config, audi
 	}
 	audio.Reader = bytes.NewReader(data)
 	hash := sha256.Sum256(data)
-	key := string(hash[:])
+	key := base64.URLEncoding.EncodeToString(hash[:])
 	if c.c.AudioSegments[key] != nil {
 		return c.c.AudioSegments[key], nil
 	}
