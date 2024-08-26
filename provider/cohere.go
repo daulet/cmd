@@ -63,8 +63,8 @@ func (p *cohereProvider) Stream(ctx context.Context, cfg *config.Config, msgs []
 	return &cohereStreamReader{stream: stream}, nil
 }
 
-func (p *cohereProvider) Transcribe(ctx context.Context, cfg *config.Config, filename string) (string, error) {
-	return "", fmt.Errorf("transcription is not supported by Cohere")
+func (p *cohereProvider) Transcribe(ctx context.Context, cfg *config.Config, audio *AudioFile) ([]*AudioSegment, error) {
+	return nil, fmt.Errorf("transcription is not supported by Cohere")
 }
 
 func (p *cohereProvider) ListModels(ctx context.Context) ([]string, error) {

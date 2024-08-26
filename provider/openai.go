@@ -62,19 +62,31 @@ func (p *openAIProvider) Stream(ctx context.Context, cfg *config.Config, msgs []
 	return &openaiStreamReader{stream: stream}, nil
 }
 
-func (p *openAIProvider) Transcribe(ctx context.Context, cfg *config.Config, filename string) (string, error) {
+func (p *openAIProvider) Transcribe(ctx context.Context, cfg *config.Config, audio *AudioFile) ([]*AudioSegment, error) {
 	model := DEFAULT_AUDIO_MODEL
 	if cfg.Model != nil {
 		model = *cfg.Model
 	}
 	res, err := p.client.CreateTranscription(ctx, openai.AudioRequest{
 		Model:    model,
-		FilePath: filename,
+		Reader:   audio.Reader,
+		FilePath: audio.FilePath,
+		Format:   openai.AudioResponseFormatVerboseJSON,
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return res.Text, nil
+
+	var segments []*AudioSegment
+	for _, segment := range res.Segments {
+		segments = append(segments, &AudioSegment{
+			Text:  segment.Text,
+			Seek:  segment.Seek,
+			Start: segment.Start,
+			End:   segment.End,
+		})
+	}
+	return segments, nil
 }
 
 func (p *openAIProvider) ListModels(ctx context.Context) ([]string, error) {

@@ -23,8 +23,8 @@ type work struct {
 }
 
 type result struct {
-	idx     int
-	content string
+	idx      int
+	segments []*provider.AudioSegment
 }
 
 func run() error {
@@ -59,7 +59,14 @@ func run() error {
 			for item := range workCh {
 				for {
 					fmt.Println("transcribing", item.file)
-					content, err := prov.Transcribe(ctx, &config.Config{}, item.file)
+					f, err := os.Open(item.file)
+					if err != nil {
+						panic(err)
+					}
+					segments, err := prov.Transcribe(ctx, &config.Config{}, &provider.AudioFile{
+						FilePath: item.file,
+						Reader:   f,
+					})
 					if err != nil {
 						waitTime := time.Minute
 						// Parse error message like:
@@ -75,7 +82,7 @@ func run() error {
 						<-time.After(waitTime)
 						continue
 					}
-					resCh <- &result{idx: item.idx, content: content}
+					resCh <- &result{idx: item.idx, segments: segments}
 					break
 				}
 			}
@@ -89,15 +96,19 @@ func run() error {
 		close(workCh)
 	}()
 
-	transcripts := make([]string, len(files))
+	transcripts := make([][]*provider.AudioSegment, len(files))
 	for res := range resCh {
-		transcripts[res.idx] = res.content
+		transcripts[res.idx] = res.segments
 	}
 	wg.Wait()
 	close(resCh)
 
 	for idx, transcript := range transcripts {
-		fmt.Printf("%d: %s\n", idx, transcript)
+		fmt.Printf("File %d:\n", idx)
+		for _, segment := range transcript {
+			fmt.Printf("%v - %v\n", segment.Start, segment.End)
+			fmt.Printf("%s\n", segment.Text)
+		}
 	}
 	return nil
 }

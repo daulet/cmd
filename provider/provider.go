@@ -19,9 +19,21 @@ type Message struct {
 	Content string
 }
 
+type AudioFile struct {
+	FilePath string
+	Reader   io.Reader
+}
+
+type AudioSegment struct {
+	Text  string
+	Seek  int
+	Start float64
+	End   float64
+}
+
 type Provider interface {
-	Stream(ctx context.Context, cfg *config.Config, msgs []*Message) (io.Reader, error)
-	Transcribe(ctx context.Context, cfg *config.Config, filename string) (string, error)
 	ListModels(ctx context.Context) ([]string, error)
 	ListConnectors(ctx context.Context) ([]string, error)
+	Stream(ctx context.Context, cfg *config.Config, msgs []*Message) (io.Reader, error)
+	Transcribe(ctx context.Context, cfg *config.Config, audio *AudioFile) ([]*AudioSegment, error)
 }

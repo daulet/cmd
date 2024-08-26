@@ -303,11 +303,20 @@ func cmd(ctx context.Context) error {
 	}
 
 	if _, err := os.Stat(usrMsg); err == nil {
-		usrMsg, err = prov.Transcribe(ctx, cfg, usrMsg)
+		f, err := os.Open(usrMsg)
+		if err != nil {
+			return fmt.Errorf("failed to read file: %w", err)
+		}
+		segments, err := prov.Transcribe(ctx, cfg, &provider.AudioFile{FilePath: usrMsg, Reader: f})
 		if err != nil {
 			return fmt.Errorf("failed to transcribe: %w", err)
 		}
-		os.Stdout.Write([]byte(usrMsg))
+		var out strings.Builder
+		for _, segment := range segments {
+			out.WriteString(fmt.Sprintf("%v - %v\n", segment.Start, segment.End))
+			out.WriteString(fmt.Sprintf("%s\n", segment.Text))
+		}
+		os.Stdout.Write([]byte(out.String()))
 		return nil
 	}
 
