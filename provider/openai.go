@@ -5,8 +5,13 @@ import (
 	"io"
 	"log"
 
-	"github.com/daulet/llm-cli/config"
+	"github.com/daulet/cmd/config"
 	"github.com/sashabaranov/go-openai"
+)
+
+const (
+	DEFAULT_AUDIO_MODEL = "whisper-large-v3"
+	DEFAULT_CHAT_MODEL  = "llama-3.1-8b-instant"
 )
 
 // Groq implements OpenAI API compatability.
@@ -43,15 +48,33 @@ func (p *OpenAIProvider) Stream(ctx context.Context, cfg *config.Config, msgs []
 		}
 	}
 
-	// TODO model dereference, make it required?
+	model := DEFAULT_CHAT_MODEL
+	if cfg.Model != nil {
+		model = *cfg.Model
+	}
 	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
-		Model:    *cfg.Model,
+		Model:    model,
 		Messages: messages,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &openaiStreamReader{stream: stream}, nil
+}
+
+func (p *OpenAIProvider) Transcribe(ctx context.Context, cfg *config.Config, filename string) (string, error) {
+	model := DEFAULT_AUDIO_MODEL
+	if cfg.Model != nil {
+		model = *cfg.Model
+	}
+	res, err := p.client.CreateTranscription(ctx, openai.AudioRequest{
+		Model:    model,
+		FilePath: filename,
+	})
+	if err != nil {
+		return "", err
+	}
+	return res.Text, nil
 }
 
 func (p *OpenAIProvider) ListModels(ctx context.Context) ([]string, error) {

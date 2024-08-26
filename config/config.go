@@ -36,7 +36,6 @@ func ReadConfig() (*Config, error) {
 	cfg := &Config{
 		// default to groq
 		Provider: ProviderGroq,
-		Model:    ref("llama-3.1-8b-instant"),
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {

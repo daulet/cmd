@@ -1,4 +1,4 @@
-module github.com/daulet/llm-cli
+module github.com/daulet/cmd
 
 go 1.21.3
 

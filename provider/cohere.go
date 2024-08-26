@@ -2,10 +2,11 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 
-	"github.com/daulet/llm-cli/config"
+	"github.com/daulet/cmd/config"
 
 	co "github.com/cohere-ai/cohere-go/v2"
 	cocli "github.com/cohere-ai/cohere-go/v2/client"
@@ -60,6 +61,10 @@ func (p *CohereProvider) Stream(ctx context.Context, cfg *config.Config, msgs []
 	}
 	// TODO stream.Close()
 	return &cohereStreamReader{stream: stream}, nil
+}
+
+func (p *CohereProvider) Transcribe(ctx context.Context, cfg *config.Config, filename string) (string, error) {
+	return "", fmt.Errorf("transcription is not supported by Cohere")
 }
 
 func (p *CohereProvider) ListModels(ctx context.Context) ([]string, error) {

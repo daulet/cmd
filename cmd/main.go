@@ -13,9 +13,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/daulet/llm-cli/config"
-	"github.com/daulet/llm-cli/parser"
-	"github.com/daulet/llm-cli/provider"
+	"github.com/daulet/cmd/config"
+	"github.com/daulet/cmd/parser"
+	"github.com/daulet/cmd/provider"
 )
 
 const (
@@ -300,6 +300,15 @@ func cmd(ctx context.Context) error {
 	usrMsg := strings.Join(flag.Args(), " ")
 	if pipeContent != "" {
 		usrMsg = fmt.Sprintf("%s\n%s", pipeContent, usrMsg)
+	}
+
+	if _, err := os.Stat(usrMsg); err == nil {
+		usrMsg, err = prov.Transcribe(ctx, cfg, usrMsg)
+		if err != nil {
+			return fmt.Errorf("failed to transcribe: %w", err)
+		}
+		os.Stdout.Write([]byte(usrMsg))
+		return nil
 	}
 
 	var err error
