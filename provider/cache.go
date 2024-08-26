@@ -72,7 +72,7 @@ func (c *cacheProvider) Close() error {
 	if err := os.MkdirAll(filepath.Dir(c.cachePath), 0755); err != nil {
 		return err
 	}
-	data, err := json.Marshal(c.c)
+	data, err := json.MarshalIndent(c.c, "", "  ")
 	if err != nil {
 		return err
 	}
