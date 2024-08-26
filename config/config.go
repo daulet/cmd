@@ -17,6 +17,7 @@ const (
 type Config struct {
 	Provider string `json:"provider,omitempty"`
 
+	Record     bool     `json:"record,omitempty"`
 	Model      *string  `json:"model,omitempty"`
 	Connectors []string `json:"connectors,omitempty"`
 
@@ -36,6 +37,8 @@ func ReadConfig() (*Config, error) {
 	cfg := &Config{
 		// default to groq
 		Provider: ProviderGroq,
+		// record by default
+		Record: true,
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {

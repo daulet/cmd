@@ -347,6 +347,15 @@ func main() {
 		log.Fatalf("unknown provider: %s", cfg.Provider)
 	}
 
+	if cfg.Record {
+		closer, err := provider.NewCacheProvider(prov, ".cache/cache.json")
+		if err != nil {
+			log.Fatalf("failed to create cache provider: %v", err)
+		}
+		defer closer.Close()
+		prov = closer
+	}
+
 	if err := cmd(ctx); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

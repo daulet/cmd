@@ -1,2 +1,7 @@
-.env
 bin/*
+
+# python venv
+.env
+
+# cache
+.cache/*

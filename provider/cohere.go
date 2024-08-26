@@ -13,17 +13,17 @@ import (
 	core "github.com/cohere-ai/cohere-go/v2/core"
 )
 
-func NewCohereProvider(apiKey string) *CohereProvider {
-	return &CohereProvider{client: cocli.NewClient(cocli.WithToken(apiKey))}
+func NewCohereProvider(apiKey string) Provider {
+	return &cohereProvider{client: cocli.NewClient(cocli.WithToken(apiKey))}
 }
 
-var _ Provider = (*CohereProvider)(nil)
+var _ Provider = (*cohereProvider)(nil)
 
-type CohereProvider struct {
+type cohereProvider struct {
 	client *cocli.Client
 }
 
-func (p *CohereProvider) Stream(ctx context.Context, cfg *config.Config, msgs []*Message) (io.Reader, error) {
+func (p *cohereProvider) Stream(ctx context.Context, cfg *config.Config, msgs []*Message) (io.Reader, error) {
 	var messages []*co.ChatMessage
 	for _, msg := range msgs {
 		switch msg.Role {
@@ -63,11 +63,11 @@ func (p *CohereProvider) Stream(ctx context.Context, cfg *config.Config, msgs []
 	return &cohereStreamReader{stream: stream}, nil
 }
 
-func (p *CohereProvider) Transcribe(ctx context.Context, cfg *config.Config, filename string) (string, error) {
+func (p *cohereProvider) Transcribe(ctx context.Context, cfg *config.Config, filename string) (string, error) {
 	return "", fmt.Errorf("transcription is not supported by Cohere")
 }
 
-func (p *CohereProvider) ListModels(ctx context.Context) ([]string, error) {
+func (p *cohereProvider) ListModels(ctx context.Context) ([]string, error) {
 	resp, err := p.client.Models.List(ctx, &co.ModelsListRequest{
 		Endpoint: (*co.CompatibleEndpoint)(co.String(string(co.CompatibleEndpointChat))),
 	})
@@ -81,7 +81,7 @@ func (p *CohereProvider) ListModels(ctx context.Context) ([]string, error) {
 	return modelNames, nil
 }
 
-func (p *CohereProvider) ListConnectors(ctx context.Context) ([]string, error) {
+func (p *cohereProvider) ListConnectors(ctx context.Context) ([]string, error) {
 	resp, err := p.client.Connectors.List(ctx, &co.ConnectorsListRequest{})
 	if err != nil {
 		return nil, err

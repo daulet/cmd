@@ -15,21 +15,21 @@ const (
 )
 
 // Groq implements OpenAI API compatability.
-func NewGroqProvider(apiKey string) *OpenAIProvider {
+func NewGroqProvider(apiKey string) Provider {
 	config := openai.DefaultConfig(apiKey)
 	config.BaseURL = "https://api.groq.com/openai/v1"
 	client := openai.NewClientWithConfig(config)
 
-	return &OpenAIProvider{client: client}
+	return &openAIProvider{client: client}
 }
 
-var _ Provider = (*OpenAIProvider)(nil)
+var _ Provider = (*openAIProvider)(nil)
 
-type OpenAIProvider struct {
+type openAIProvider struct {
 	client *openai.Client
 }
 
-func (p *OpenAIProvider) Stream(ctx context.Context, cfg *config.Config, msgs []*Message) (io.Reader, error) {
+func (p *openAIProvider) Stream(ctx context.Context, cfg *config.Config, msgs []*Message) (io.Reader, error) {
 	var messages []openai.ChatCompletionMessage
 	for _, msg := range msgs {
 		switch msg.Role {
@@ -62,7 +62,7 @@ func (p *OpenAIProvider) Stream(ctx context.Context, cfg *config.Config, msgs []
 	return &openaiStreamReader{stream: stream}, nil
 }
 
-func (p *OpenAIProvider) Transcribe(ctx context.Context, cfg *config.Config, filename string) (string, error) {
+func (p *openAIProvider) Transcribe(ctx context.Context, cfg *config.Config, filename string) (string, error) {
 	model := DEFAULT_AUDIO_MODEL
 	if cfg.Model != nil {
 		model = *cfg.Model
@@ -77,7 +77,7 @@ func (p *OpenAIProvider) Transcribe(ctx context.Context, cfg *config.Config, fil
 	return res.Text, nil
 }
 
-func (p *OpenAIProvider) ListModels(ctx context.Context) ([]string, error) {
+func (p *openAIProvider) ListModels(ctx context.Context) ([]string, error) {
 	models, err := p.client.ListModels(ctx)
 	if err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func (p *OpenAIProvider) ListModels(ctx context.Context) ([]string, error) {
 	return modelNames, nil
 }
 
-func (p *OpenAIProvider) ListConnectors(ctx context.Context) ([]string, error) {
+func (p *openAIProvider) ListConnectors(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
 
