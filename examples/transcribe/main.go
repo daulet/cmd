@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -15,7 +17,7 @@ import (
 	"github.com/daulet/cmd/provider"
 )
 
-const MAX_CONCURRENT_REQUESTS = 10
+const MAX_CONCURRENT_REQUESTS = 2
 
 type work struct {
 	idx  int
@@ -45,27 +47,38 @@ func run() error {
 			return fmt.Errorf("failed to create cache provider: %w", err)
 		}
 		defer cache.Close()
+
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, os.Interrupt)
+		go func() {
+			<-sigCh
+			cache.Close()
+			os.Exit(1)
+		}()
+
 		prov = cache
 	}
 
-	ctx := context.Background()
-	var wg sync.WaitGroup
-	resCh := make(chan *result)
-	workCh := make(chan *work)
+	var (
+		wg     sync.WaitGroup
+		ctx    = context.Background()
+		workCh = make(chan *work)
+		resCh  = make(chan *result)
+	)
 	for range MAX_CONCURRENT_REQUESTS {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for item := range workCh {
+				data, err := os.ReadFile(item.file)
+				if err != nil {
+					panic(err)
+				}
 				for {
 					fmt.Println("transcribing", item.file)
-					f, err := os.Open(item.file)
-					if err != nil {
-						panic(err)
-					}
 					segments, err := prov.Transcribe(ctx, &config.Config{}, &provider.AudioFile{
 						FilePath: item.file,
-						Reader:   f,
+						Reader:   bytes.NewReader(data),
 					})
 					if err != nil {
 						waitTime := time.Minute
@@ -77,6 +90,8 @@ func run() error {
 							minutes, _ := strconv.Atoi(matches[1])
 							seconds, _ := strconv.ParseFloat(matches[2], 64)
 							waitTime = time.Duration(minutes)*time.Minute + time.Duration(seconds)*time.Second
+						} else {
+							fmt.Printf("failed to parse error: %w\n", err)
 						}
 						fmt.Printf("waiting for %s\n", waitTime)
 						<-time.After(waitTime)
@@ -97,7 +112,8 @@ func run() error {
 	}()
 
 	transcripts := make([][]*provider.AudioSegment, len(files))
-	for res := range resCh {
+	for range files {
+		res := <-resCh
 		transcripts[res.idx] = res.segments
 	}
 	wg.Wait()
