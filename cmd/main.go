@@ -179,7 +179,9 @@ func parseConfig(ctx context.Context) (bool, error) {
 			fmt.Println(model)
 		}
 		fmt.Println()
-		fmt.Printf("Currently selected model: %s\n", *cfg.Model)
+		if cfg.Model != nil {
+			fmt.Printf("Currently selected model: %s\n", *cfg.Model)
+		}
 		return true, nil
 	}
 
@@ -279,7 +281,9 @@ func cmd(ctx context.Context) error {
 		out.Close()
 		<-done
 		for _, block := range blocks {
-			runBlock(block)
+			if err := runBlock(block); err != nil {
+				return "", err
+			}
 		}
 
 		return response, nil
@@ -338,13 +342,10 @@ func cmd(ctx context.Context) error {
 func main() {
 	flag.Parse()
 
-	ctx := context.Background()
-	done, err := parseConfig(ctx)
+	// read config first so we can use the right provider
+	cfg, err := config.ReadConfig()
 	if err != nil {
 		panic(err)
-	}
-	if done {
-		return
 	}
 
 	switch cfg.Provider {
@@ -354,6 +355,15 @@ func main() {
 		prov = provider.NewCohereProvider(os.Getenv(COHERE_API_KEY))
 	default:
 		log.Fatalf("unknown provider: %s", cfg.Provider)
+	}
+
+	ctx := context.Background()
+	done, err := parseConfig(ctx)
+	if err != nil {
+		panic(err)
+	}
+	if done {
+		return
 	}
 
 	if cfg.Record {
