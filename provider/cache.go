@@ -27,7 +27,9 @@ func NewCacheProvider(p Provider, cachePath string) (ProviderCloser, error) {
 		}
 		return nil, err
 	}
-	cache := &cache{}
+	cache := &cache{
+		AudioSegments: make(map[string][]*AudioSegment),
+	}
 	if err := json.Unmarshal(data, cache); err != nil {
 		return nil, err
 	}

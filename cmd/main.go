@@ -16,6 +16,8 @@ import (
 	"github.com/daulet/cmd/config"
 	"github.com/daulet/cmd/parser"
 	"github.com/daulet/cmd/provider"
+
+	"github.com/fatih/color"
 )
 
 const (
@@ -148,7 +150,10 @@ func runBlock(block *parser.CodeBlock) error {
 func runCmd(prog string, args ...string) error {
 	cmd := exec.Command(prog, args...)
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = &colorWriter{
+		Writer: os.Stderr,
+		Color:  color.New(color.FgHiRed),
+	}
 	return cmd.Run()
 }
 
@@ -254,7 +259,7 @@ func cmd(ctx context.Context) error {
 			go func() {
 				defer close(done)
 				for block := range blockCh {
-					runBlock(block)
+					_ = runBlock(block)
 				}
 			}()
 			// no output to the user, we just execute the code
@@ -376,7 +381,7 @@ func main() {
 	}
 
 	if err := cmd(ctx); err != nil {
-		fmt.Println(err)
+		color.Yellow("error: %v", err)
 		os.Exit(1)
 	}
 }
