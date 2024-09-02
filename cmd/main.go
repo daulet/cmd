@@ -380,8 +380,13 @@ func main() {
 		prov = closer
 	}
 
-	if err := cmd(ctx); err != nil {
-		color.Yellow("error: %v", err)
+	err = cmd(ctx)
+	color.Set(color.FgYellow)
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		os.Exit(exitErr.ExitCode())
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
