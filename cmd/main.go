@@ -23,6 +23,8 @@ import (
 const (
 	COHERE_API_KEY = "COHERE_API_KEY"
 	GROQ_API_KEY   = "GROQ_API_KEY"
+
+	CONTEXT_TEMPLATE = "%s\n\n%s"
 )
 
 var (
@@ -50,6 +52,7 @@ func multiTurn(
 	ctx context.Context,
 	out io.WriteCloser,
 	in io.Reader,
+	context string,
 	turnFn func(context.Context, io.WriteCloser, []*provider.Message) (string, error),
 ) error {
 	var (
@@ -68,6 +71,10 @@ func multiTurn(
 			return r.Err()
 		}
 		userMsg := r.Text()
+		if context != "" {
+			userMsg = fmt.Sprintf(CONTEXT_TEMPLATE, context, userMsg)
+			context = ""
+		}
 
 		msgs = append(msgs,
 			&provider.Message{
@@ -283,7 +290,10 @@ func cmd(ctx context.Context) error {
 			return "", err
 		}
 
-		out.Close()
+		if out != os.Stdout {
+			// has to be closed so we are not blocked on code blocks
+			out.Close()
+		}
 		<-done
 		for _, block := range blocks {
 			if err := runBlock(block); err != nil {
@@ -294,9 +304,17 @@ func cmd(ctx context.Context) error {
 		return response, nil
 	}
 
-	var pipeContent string
+	var (
+		in          io.Reader = os.Stdin
+		pipeContent string
+		err         error
+	)
 	// Check if there is input from the pipe (stdin)
 	if stat, _ := os.Stdin.Stat(); (stat.Mode() & os.ModeCharDevice) == 0 {
+		in, err = os.Open("/dev/tty")
+		if err != nil {
+			return fmt.Errorf("failed to open /dev/tty: %w", err)
+		}
 		pipeBytes, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			return fmt.Errorf("failed to read from pipe: %w", err)
@@ -308,7 +326,7 @@ func cmd(ctx context.Context) error {
 	}
 	usrMsg := strings.Join(flag.Args(), " ")
 	if pipeContent != "" {
-		usrMsg = fmt.Sprintf("%s\n%s", pipeContent, usrMsg)
+		usrMsg = fmt.Sprintf(CONTEXT_TEMPLATE, pipeContent, usrMsg)
 	}
 
 	if _, err := os.Stat(usrMsg); err == nil {
@@ -329,10 +347,9 @@ func cmd(ctx context.Context) error {
 		return nil
 	}
 
-	var err error
 	switch {
 	case *chat:
-		err = multiTurn(ctx, os.Stdout, os.Stdin, turnFn)
+		err = multiTurn(ctx, os.Stdout, in, usrMsg, turnFn)
 	default:
 		_, err = turnFn(ctx, os.Stdout, []*provider.Message{
 			{

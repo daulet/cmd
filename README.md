@@ -1,10 +1,15 @@
 
 # cmd
 
-Most common usage is to pass your message as an argument (wrap it in quotes if it contains special shell modifiers like `*` or `?`): `cmd hi` or `cmd "what's up?"`. Addtionally, you can pipe content to it:
+Most common usage is to pass your message as an argument: `cmd hi` or `cmd "what's up?"`. More interestingly, you can pipe content to it:
 ```bash
-cat README.md | cmd briefly describe functionality
-Cmd is a versatile command-line tool that leverages AI to understand natural language input and generate shell commands or even entire scripts. It offers various flags to enhance its functionality. You can use `-run` to execute the generated command and display the output, while `-exec` executes the command without showing the generation process or output. For multi-turn interactions, there's `-chat`, and you can configure the model, connectors, and other settings with `-config` and related flags. Additionally, content can be piped into cmd for quick processing.
+cat README.md | cmd describe in one line
+`cmd` is a command-line tool that leverages AI to generate shell commands, scripts, or code from natural language input.
+```
+
+Chat with audio: pipe transcription (which could be expensive operation time-wise due to audio size) to interactive mode (`cmd -chat`) to ask multi turn questions with the same audio context:
+```bash
+cmd audio.mp3 | cmd -chat
 ```
 
 ## Install
