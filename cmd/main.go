@@ -191,8 +191,8 @@ func parseConfig(ctx context.Context) (bool, error) {
 			fmt.Println(model)
 		}
 		fmt.Println()
-		if cfg.Model != nil {
-			fmt.Printf("Currently selected model: %s\n", *cfg.Model)
+		for modelType, model := range cfg.Model {
+			fmt.Printf("Currently selected model for %s: %s\n", modelType, model)
 		}
 		return true, nil
 	}
@@ -214,8 +214,11 @@ func parseConfig(ctx context.Context) (bool, error) {
 	dirtyCfg := false
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
+		// TODO changing provider should reset model selection
 		case "model":
-			cfg.Model = setModel
+			// TODO there is no way to unset model
+			modelType := config.ModelType(*setModel)
+			cfg.Model[modelType] = *setModel
 			dirtyCfg = true
 		case "connectors":
 			cfg.Connectors = strings.Split(*setConnectors, ",")
@@ -398,12 +401,11 @@ func main() {
 	}
 
 	err = cmd(ctx)
-	color.Set(color.FgYellow)
 	if exitErr, ok := err.(*exec.ExitError); ok {
 		os.Exit(exitErr.ExitCode())
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		color.Yellow("error: %v\n", err)
 		os.Exit(1)
 	}
 }

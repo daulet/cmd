@@ -49,8 +49,8 @@ func (p *openAIProvider) Stream(ctx context.Context, cfg *config.Config, msgs []
 	}
 
 	model := DEFAULT_CHAT_MODEL
-	if cfg.Model != nil {
-		model = *cfg.Model
+	if cfg.Model[config.ModelTypeChat] != "" {
+		model = cfg.Model[config.ModelTypeChat]
 	}
 	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model:    model,
@@ -64,8 +64,8 @@ func (p *openAIProvider) Stream(ctx context.Context, cfg *config.Config, msgs []
 
 func (p *openAIProvider) Transcribe(ctx context.Context, cfg *config.Config, audio *AudioFile) ([]*AudioSegment, error) {
 	model := DEFAULT_AUDIO_MODEL
-	if cfg.Model != nil {
-		model = *cfg.Model
+	if cfg.Model[config.ModelTypeSpeechToText] != "" {
+		model = cfg.Model[config.ModelTypeSpeechToText]
 	}
 	res, err := p.client.CreateTranscription(ctx, openai.AudioRequest{
 		Model:    model,

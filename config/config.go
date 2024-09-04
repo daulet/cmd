@@ -12,14 +12,17 @@ const configPath = ".cmd/config.json"
 const (
 	ProviderGroq   = "groq"
 	ProviderCohere = "cohere"
+
+	ModelTypeChat         = "chat"
+	ModelTypeSpeechToText = "stt"
 )
 
 type Config struct {
 	Provider string `json:"provider,omitempty"`
 
-	Record     bool     `json:"record,omitempty"`
-	Model      *string  `json:"model,omitempty"`
-	Connectors []string `json:"connectors,omitempty"`
+	Record     bool              `json:"record,omitempty"`
+	Model      map[string]string `json:"model,omitempty"`
+	Connectors []string          `json:"connectors,omitempty"`
 
 	// Sampling parameters
 	Temperature      *float64 `json:"temperature,omitempty"`
@@ -39,6 +42,7 @@ func ReadConfig() (*Config, error) {
 		Provider: ProviderGroq,
 		// record by default
 		Record: true,
+		Model:  make(map[string]string),
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -74,6 +78,6 @@ func ConfigPath() (string, error) {
 	return filepath.Join(homeDir, configPath), nil
 }
 
-func ref(v string) *string {
+func Ref(v string) *string {
 	return &v
 }

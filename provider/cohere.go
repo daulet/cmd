@@ -41,11 +41,15 @@ func (p *cohereProvider) Stream(ctx context.Context, cfg *config.Config, msgs []
 			log.Fatalf("unknown role: %s", msg.Role)
 		}
 	}
+	var model *string
+	if cfg.Model[config.ModelTypeChat] != "" {
+		model = config.Ref(cfg.Model[config.ModelTypeChat])
+	}
 	req := &co.ChatStreamRequest{
 		ChatHistory: messages[:len(messages)-1],
 		Message:     messages[len(messages)-1].Message,
 
-		Model:            cfg.Model,
+		Model:            model,
 		Temperature:      cfg.Temperature,
 		P:                cfg.TopP,
 		K:                cfg.TopK,
