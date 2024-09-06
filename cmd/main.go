@@ -43,6 +43,7 @@ var (
 	setFreqPen     = flag.Float64("frequency-penalty", 0.0, "Set frequency penalty value.")
 	setPresPen     = flag.Float64("presence-penalty", 0.0, "Set presence penalty value.")
 
+	// TODO make -i option
 	chat    = flag.Bool("chat", false, "Start chat session with LLM, other flags apply.")
 	execute = flag.Bool("exec", false, "Execute generated command/code, do not show LLM output.")
 	run     = flag.Bool("run", false, "Stream LLM output and run generated command/code at the end.")
@@ -314,15 +315,17 @@ func cmd(ctx context.Context) error {
 	)
 	// Check if there is input from the pipe (stdin)
 	if stat, _ := os.Stdin.Stat(); (stat.Mode() & os.ModeCharDevice) == 0 {
-		in, err = os.Open("/dev/tty")
-		if err != nil {
-			return fmt.Errorf("failed to open /dev/tty: %w", err)
-		}
 		pipeBytes, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			return fmt.Errorf("failed to read from pipe: %w", err)
 		}
 		pipeContent = string(pipeBytes)
+	}
+	if *chat {
+		in, err = os.Open("/dev/tty")
+		if err != nil {
+			return fmt.Errorf("failed to open /dev/tty: %w", err)
+		}
 	}
 	if flag.NArg() == 0 && pipeContent == "" {
 		return fmt.Errorf("what's your command?")
