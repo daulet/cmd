@@ -21,9 +21,6 @@ import (
 )
 
 const (
-	COHERE_API_KEY = "COHERE_API_KEY"
-	GROQ_API_KEY   = "GROQ_API_KEY"
-
 	CONTEXT_TEMPLATE = "%s\n\n%s"
 )
 
@@ -378,11 +375,15 @@ func main() {
 
 	switch cfg.Provider {
 	case config.ProviderGroq:
-		prov = provider.NewGroqProvider(os.Getenv(GROQ_API_KEY))
+		prov, err = provider.NewGroqProvider()
 	case config.ProviderCohere:
-		prov = provider.NewCohereProvider(os.Getenv(COHERE_API_KEY))
+		prov, err = provider.NewCohereProvider()
 	default:
 		log.Fatalf("unknown provider: %s", cfg.Provider)
+	}
+	if err != nil {
+		color.Yellow("error: %v\n", err)
+		os.Exit(1)
 	}
 
 	ctx := context.Background()

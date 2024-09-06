@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
 
 	"github.com/daulet/cmd/config"
 
@@ -13,8 +14,14 @@ import (
 	core "github.com/cohere-ai/cohere-go/v2/core"
 )
 
-func NewCohereProvider(apiKey string) Provider {
-	return &cohereProvider{client: cocli.NewClient(cocli.WithToken(apiKey))}
+const COHERE_API_KEY = "COHERE_API_KEY"
+
+func NewCohereProvider() (Provider, error) {
+	apiKey := os.Getenv(COHERE_API_KEY)
+	if apiKey == "" {
+		return nil, fmt.Errorf("Set %s env variable to your Cohere API key. Get one at https://dashboard.cohere.com/api-keys", COHERE_API_KEY)
+	}
+	return &cohereProvider{client: cocli.NewClient(cocli.WithToken(apiKey))}, nil
 }
 
 var _ Provider = (*cohereProvider)(nil)

@@ -2,25 +2,34 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
+	"os"
 
 	"github.com/daulet/cmd/config"
 	"github.com/sashabaranov/go-openai"
 )
 
 const (
+	GROQ_API_KEY = "GROQ_API_KEY"
+
 	DEFAULT_AUDIO_MODEL = "whisper-large-v3"
 	DEFAULT_CHAT_MODEL  = "llama-3.1-8b-instant"
 )
 
 // Groq implements OpenAI API compatability.
-func NewGroqProvider(apiKey string) Provider {
+func NewGroqProvider() (Provider, error) {
+	apiKey := os.Getenv(GROQ_API_KEY)
+	if apiKey == "" {
+		return nil, fmt.Errorf("Set %s env variable to your Groq API key. Get one at https://console.groq.com/keys", GROQ_API_KEY)
+	}
+
 	config := openai.DefaultConfig(apiKey)
 	config.BaseURL = "https://api.groq.com/openai/v1"
 	client := openai.NewClientWithConfig(config)
 
-	return &openAIProvider{client: client}
+	return &openAIProvider{client: client}, nil
 }
 
 var _ Provider = (*openAIProvider)(nil)
