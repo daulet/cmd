@@ -29,9 +29,9 @@ for target in "${TARGETS[@]}"; do
 
   if [ ! -z "$GIT_TAGS" ]; then
     GIT_VERSION=$(git describe --tags $GIT_TAGS)
-    CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="-s -w -X main.GitCommit=$GIT_COMMIT -X main.GitVersion=$GIT_VERSION" -o "bin/$binary_name" -a cmd/main.go
+    CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="-s -w -X main.GitCommit=$GIT_COMMIT -X main.GitVersion=$GIT_VERSION" -o "bin/$binary_name" -a ./cmd
   else
-    CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="-s -w -X main.GitCommit=$GIT_COMMIT" -o "bin/$binary_name" -a cmd/main.go
+    CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="-s -w -X main.GitCommit=$GIT_COMMIT" -o "bin/$binary_name" -a ./cmd
   fi
 
   echo "done"
