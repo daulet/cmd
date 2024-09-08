@@ -7,9 +7,9 @@ cat README.md | cmd describe in one line
 `cmd` is a command-line tool that leverages AI to generate shell commands, scripts, or code from natural language input.
 ```
 
-Chat with audio: pipe transcription (which could be expensive operation time-wise due to audio size) to interactive mode (`cmd -chat`) to ask multi turn questions with the same audio context:
+Chat with audio: pipe transcription (which could be expensive operation time-wise due to audio size) to interactive mode (`cmd -i`) to ask multi turn questions with the same audio context:
 ```bash
-cmd audio.mp3 | cmd -chat
+cmd audio.mp3 | cmd -i
 ```
 
 ## Install
@@ -18,11 +18,11 @@ cmd audio.mp3 | cmd -chat
 $ brew tap daulet/cmd && brew install cmd
 ```
 
-## run code
+## Run model output (code blocks)
 
-If you'd like to run the generated shell command or code, use `-run`:
+If you'd like to run the generated shell command or code, use `--run`:
 ```bash
-$ cmd -run print third last commit hash
+$ cmd --run print third last commit hash
 To print the third last commit hash, you can use the following Git command:
 
 bash
@@ -33,11 +33,11 @@ a200e6d429e2888344d7254ac02a00618ab432a2
 ```
 Supported languages include Go, Bash, Python and HTML. The language is assumed from identifier immediately following backticks of fenced code blocks, hence it could be error prone if no language is specified, or if code is broken down into multiple blocks (common for HTML).
 
-## execute code
+## Execute model output (code blocks)
 
-To _just_ execute generated command or a script (like `-run`), but _without_ actually outputing it (useful for piping), use `-exec`, which will not output generation hence be patient:
+To _just_ execute generated command or a script (like `--run`), but _without_ actually outputing it (useful for piping), use `--execute` (`-e`), which will not output generation hence be patient:
 ```bash
-$ cmd -exec print shell command to brief description for last five commits
+$ cmd --execute print shell command to brief description for last five commits
 27a6a07 add an option to execute generate command
 ac88d6a parse code blocks as we stream, not after the fact
 a200e6d simplify now that code parsing is async
@@ -45,32 +45,32 @@ a200e6d simplify now that code parsing is async
 d42893c (HEAD -> main, origin/main) simplify code parser, make exec truly optional
 ```
 
-## chat
+## Interactive mode
 
-To start a multi turn chat session use `-chat`:
+To start a multi turn chat session use `-i`:
 ```bash
-$ cmd -chat
+$ cmd -i
 User> (your message)
 ```
 
-Which is also compatible with other flags, like `-run`, that can be used to iterate on a solution:
+Which is also compatible with other flags, like `--run`, that can be used to iterate on a solution:
 ```bash
-$ cmd -run -chat
+$ cmd -r -i
 User> html for a bouncing ball
 ```
 
 ## Configure
 
-You can check current configuration using `cmd -config`, and to change it use:
-* `-model` to set the model (use `-list-models` to see your options);
-* `-connectors` to set comma delimited connectors (use `-list-connectors` to see your options);
-* `-temperature` to set the temperature;
-* `-top-p` to set the top P;
-* `-top-k` to set the top K;
-* `-frequency-penalty` to set the frequency penalty;
-* `-presence-penalty` to set the presence penalty;
+You can check current configuration using `cmd --config`, and to change it use:
+* `--model` to set the model (use `--list-models` to see your options);
+* `--connector` to set connectors (use `--list-connectors` to see your options);
+* `--temperature` to set the temperature;
+* `--top-p` to set the top P;
+* `--top-k` to set the top K;
+* `--freq` to set the frequency penalty;
+* `--pres` to set the presence penalty;
 ```bash
-$ cmd -connectors web-search
+$ cmd --connector web-search --connector google-drive
 ```
 
 # Cool use cases
@@ -114,7 +114,7 @@ cat house-prices.csv | cmd convert to json
 
 Programmatic approach (program is still written by LLM):
 ```bash
-cat house-prices.csv | cmd -exec write python program to convert this to json and read the data from house-prices.csv
+cat house-prices.csv | cmd --execute write python program to convert this to json and read the data from house-prices.csv
 [
     {
         "Home": "1",
@@ -132,5 +132,5 @@ cat house-prices.csv | cmd -exec write python program to convert this to json an
 Of course whichever approach you choose, you can always pipe the output to another command to further process it.
 
 ```bash
-cat house-prices.csv | cmd -exec write python program to convert this to json and print it out, read the data from house-prices.csv | cmd -run run python program to plot this data
+cat house-prices.csv | cmd --execute write python program to convert this to json and print it out, read the data from house-prices.csv | cmd --run run python program to plot this data
 ```
