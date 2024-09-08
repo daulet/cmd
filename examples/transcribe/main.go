@@ -40,7 +40,11 @@ func run() error {
 		return fmt.Errorf("failed to glob files: %w", err)
 	}
 
-	prov := provider.NewGroqProvider(os.Getenv("GROQ_API_KEY"))
+	prov, err := provider.NewGroqProvider()
+	if err != nil {
+		return err
+	}
+
 	{
 		cache, err := provider.NewCacheProvider(prov, ".cache/cache.json")
 		if err != nil {
