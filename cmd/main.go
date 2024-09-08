@@ -115,8 +115,8 @@ func generate(
 	return buf.String(), nil
 }
 
-// TODO return correct exit code when -run or -exec fails
-func runBlock(block *parser.CodeBlock) error {
+// TODO return correct exit code when -run or -exec fails - is this fixed?
+func runBlock(block *parser.CodeBlock, tempDir string) error {
 	switch block.Lang {
 	case parser.Go:
 		code := block.Code
@@ -124,7 +124,7 @@ func runBlock(block *parser.CodeBlock) error {
 		if !strings.HasPrefix(block.Code, "package") {
 			code = fmt.Sprintf("package main\n\n%s", block.Code)
 		}
-		path := fmt.Sprintf("%smain.go", os.TempDir())
+		path := fmt.Sprintf("%smain.go", tempDir)
 		if err := os.WriteFile(path, []byte(code), 0644); err != nil {
 			return err
 		}
@@ -136,15 +136,27 @@ func runBlock(block *parser.CodeBlock) error {
 			return err
 		}
 	case parser.HTML:
-		path := fmt.Sprintf("%sindex.html", os.TempDir())
+		path := fmt.Sprintf("%sindex.html", tempDir)
 		if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
 			return err
 		}
 		if err := runCmd("open", fmt.Sprintf("file://%s", path)); err != nil {
 			return err
 		}
+	case parser.JavaScript:
+		path := fmt.Sprintf("%sscript.js", tempDir) // TODO can this be parsed from model output? sometimes changes
+		if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
+			return err
+		}
+		// assumed to be part of html, so not executed separately
+	case parser.CSS:
+		path := fmt.Sprintf("%sstyle.css", tempDir) // TODO can this be parsed from model output? sometimes changes
+		if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
+			return err
+		}
+		// assumed to be part of html, so not executed separately
 	case parser.Python:
-		path := fmt.Sprintf("%smain.py", os.TempDir())
+		path := fmt.Sprintf("%smain.py", tempDir)
 		if err := os.WriteFile(path, []byte(block.Code), 0644); err != nil {
 			return err
 		}
@@ -280,8 +292,9 @@ func cmd(ctx context.Context, usrMsg string, flagVals *flagValues) error {
 			codeW, blockCh := parser.NewCode()
 			go func() {
 				defer close(done)
+				tempDir := os.TempDir()
 				for block := range blockCh {
-					_ = runBlock(block)
+					_ = runBlock(block, tempDir)
 				}
 			}()
 			// no output to the user, we just execute the code
@@ -310,8 +323,9 @@ func cmd(ctx context.Context, usrMsg string, flagVals *flagValues) error {
 			out.Close()
 		}
 		<-done
+		tempDir := os.TempDir()
 		for _, block := range blocks {
-			if err := runBlock(block); err != nil {
+			if err := runBlock(block, tempDir); err != nil {
 				return "", err
 			}
 		}
@@ -338,13 +352,14 @@ func cmd(ctx context.Context, usrMsg string, flagVals *flagValues) error {
 			return fmt.Errorf("failed to open /dev/tty: %w", err)
 		}
 	}
-	if usrMsg == "" && pipeContent == "" {
+	if usrMsg == "" && pipeContent == "" && !flagVals.Interactive {
 		return fmt.Errorf("what's your command?")
 	}
 	if pipeContent != "" {
 		usrMsg = fmt.Sprintf(CONTEXT_TEMPLATE, pipeContent, usrMsg)
 	}
 
+	// TODO require -f flag for file input, use it for image too
 	if _, err := os.Stat(usrMsg); err == nil {
 		f, err := os.Open(usrMsg)
 		if err != nil {

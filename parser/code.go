@@ -14,6 +14,8 @@ const (
 	Go
 	Bash
 	HTML
+	JavaScript
+	CSS
 	Python
 )
 
@@ -25,6 +27,10 @@ func language(s string) Language {
 		return Bash
 	case "html":
 		return HTML
+	case "javascript", "js":
+		return JavaScript
+	case "css":
+		return CSS
 	case "python", "python3":
 		return Python
 	default:
