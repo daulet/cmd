@@ -1,18 +1,21 @@
 package config
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
-func ModelType(model string) string {
+func ModelType(model string) (string, error) {
 	switch {
 	case strings.Contains(model, "command"):
-		return ModelTypeChat
+		return ModelTypeChat, nil
 	case strings.Contains(model, "gemma"):
-		return ModelTypeChat
+		return ModelTypeChat, nil
 	case strings.Contains(model, "llama"):
-		return ModelTypeChat
+		return ModelTypeChat, nil
 	case strings.Contains(model, "whisper"):
-		return ModelTypeSpeechToText
+		return ModelTypeSpeechToText, nil
 	default:
-		panic("unknown model: " + model)
+		return "", fmt.Errorf("unknown model: %s", model)
 	}
 }

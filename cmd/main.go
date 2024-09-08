@@ -217,8 +217,12 @@ func parseConfig(ctx context.Context, flagDefs []*flags.Option, flagVals *flagVa
 	if flagVals.SetModel != nil {
 		dirtyCfg = true
 		model := *flagVals.SetModel
+		modelType, err := config.ModelType(model)
+		if err != nil {
+			return false, err
+		}
 		// TODO there is no way to unset model
-		cfg.Model[config.ModelType(model)] = model
+		cfg.Model[modelType] = model
 	}
 
 	if flagVals.SetConnectors != nil {
@@ -373,16 +377,16 @@ func cmd(ctx context.Context, usrMsg string, flagVals *flagValues) error {
 	return err
 }
 
-func main() {
+func run() error {
 	flagVals := &flagValues{}
 	parser := flags.NewParser(nil, flags.Default)
 	g, err := parser.AddGroup("Application Options", "", flagVals)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	unparsed, err := parser.Parse()
 	if err != nil {
-		panic(err)
+		return err
 	}
 	usrMsg := strings.Join(unparsed, " ")
 	flagDefs := g.Options()
@@ -390,7 +394,7 @@ func main() {
 	// read config first so we can use the right provider
 	cfg, err := config.ReadConfig()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	switch cfg.Provider {
@@ -399,20 +403,19 @@ func main() {
 	case config.ProviderCohere:
 		prov, err = provider.NewCohereProvider()
 	default:
-		log.Fatalf("unknown provider: %s", cfg.Provider)
+		return fmt.Errorf("unknown provider in config: %s", cfg.Provider)
 	}
 	if err != nil {
-		color.Yellow("error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
 	ctx := context.Background()
 	done, err := parseConfig(ctx, flagDefs, flagVals)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	if done {
-		return
+		return nil
 	}
 
 	if cfg.Record {
@@ -424,7 +427,14 @@ func main() {
 		prov = closer
 	}
 
-	err = cmd(ctx, usrMsg, flagVals)
+	return cmd(ctx, usrMsg, flagVals)
+}
+
+func main() {
+	err := run()
+	if flagsErr, ok := err.(*flags.Error); ok && flagsErr.Type == flags.ErrHelp {
+		os.Exit(1)
+	}
 	if exitErr, ok := err.(*exec.ExitError); ok {
 		os.Exit(exitErr.ExitCode())
 	}
