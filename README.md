@@ -95,6 +95,18 @@ $ cmd --connector web-search --connector google-drive
 
 # Cool use cases
 
+## Search images
+
+```
+find images -maxdepth 1 -type f -name "*.jpg" -exec cmd -f {} is this image of llama \; -print
+
+No, this image is of a penguin, not a llama. It is a black and white drawing of a penguin on white and black background.
+images/penguin.jpg
+Yes, the image shows a llama wearing sunglasses.
+images/llama.jpg
+```
+
+
 ## Read PDF document
 
 Pipe with xpdf (`brew install xpdf`) or similar:
