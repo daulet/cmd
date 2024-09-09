@@ -15,9 +15,33 @@ const (
 )
 
 type Message struct {
-	Role    Role
-	Content string
+	Role      Role
+	Content   string
+	MultiPart []*MessagePart
 }
+
+var _ OneOf = (*ImagePart)(nil)
+var _ OneOf = (*TextPart)(nil)
+
+type OneOf interface {
+	isOneOf()
+}
+
+type MessagePart struct {
+	Field OneOf
+}
+
+type ImagePart struct {
+	Data string
+}
+
+func (m *ImagePart) isOneOf() {}
+
+type TextPart struct {
+	Text string
+}
+
+func (m *TextPart) isOneOf() {}
 
 type AudioFile struct {
 	FilePath string

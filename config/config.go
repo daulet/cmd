@@ -14,6 +14,7 @@ const (
 	ProviderCohere = "cohere"
 
 	ModelTypeChat         = "chat"
+	ModelTypeChatImage    = "chat-image"
 	ModelTypeSpeechToText = "stt"
 )
 

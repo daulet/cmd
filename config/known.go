@@ -13,6 +13,8 @@ func ModelType(model string) (string, error) {
 		return ModelTypeChat, nil
 	case strings.Contains(model, "llama"):
 		return ModelTypeChat, nil
+	case strings.Contains(model, "llava"):
+		return ModelTypeChatImage, nil
 	case strings.Contains(model, "whisper"):
 		return ModelTypeSpeechToText, nil
 	default:

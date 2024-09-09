@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -22,6 +24,9 @@ import (
 
 const (
 	CONTEXT_TEMPLATE = "%s\n\n%s"
+
+	AUDIO_MIME_PREFIX = "audio/"
+	IMAGE_MIME_PREFIX = "image/"
 )
 
 var (
@@ -33,6 +38,8 @@ type flagValues struct {
 	Interactive bool `short:"i" long:"interactive" description:"Start chat session with LLM, other flags apply."`
 	Execute     bool `short:"e" long:"execute" description:"Execute generated command/code, do not show LLM output."`
 	Run         bool `short:"r" long:"run" description:"Stream LLM output and run generated command/code at the end."`
+	// TODO support multiple files to allow multiple images
+	File *string `short:"f" long:"file" description:"File to process, depending on the type it will either be transcribed or sent as image."`
 
 	ShowConfig bool `short:"c" long:"config" description:"Show current config."`
 
@@ -53,7 +60,7 @@ func multiTurn(
 	ctx context.Context,
 	out io.WriteCloser,
 	in io.Reader,
-	context string,
+	contextMsg *provider.Message,
 	turnFn func(context.Context, io.WriteCloser, []*provider.Message) (string, error),
 ) error {
 	var (
@@ -72,17 +79,29 @@ func multiTurn(
 			return r.Err()
 		}
 		userMsg := r.Text()
-		if context != "" {
-			userMsg = fmt.Sprintf(CONTEXT_TEMPLATE, context, userMsg)
-			context = ""
-		}
 
-		msgs = append(msgs,
-			&provider.Message{
+		var nextMsg *provider.Message
+		if contextMsg != nil {
+			if contextMsg.Content != "" {
+				contextMsg.Content = fmt.Sprintf("%s %s", contextMsg.Content, userMsg)
+			} else {
+				// when first message is multi part, the first part is text
+				contextMsg.MultiPart[0] = &provider.MessagePart{
+					Field: &provider.TextPart{
+						Text: userMsg,
+					},
+				}
+			}
+			nextMsg = contextMsg
+			contextMsg = nil
+		} else {
+			nextMsg = &provider.Message{
 				Role:    provider.User,
 				Content: userMsg,
-			})
+			}
+		}
 
+		msgs = append(msgs, nextMsg)
 		botMsg, err := turnFn(ctx, out, msgs)
 		if err != nil {
 			return err
@@ -294,6 +313,7 @@ func cmd(ctx context.Context, usrMsg string, flagVals *flagValues) error {
 				defer close(done)
 				tempDir := os.TempDir()
 				for block := range blockCh {
+					// TODO the error is swallowed
 					_ = runBlock(block, tempDir)
 				}
 			}()
@@ -352,42 +372,65 @@ func cmd(ctx context.Context, usrMsg string, flagVals *flagValues) error {
 			return fmt.Errorf("failed to open /dev/tty: %w", err)
 		}
 	}
-	if usrMsg == "" && pipeContent == "" && !flagVals.Interactive {
+	if usrMsg == "" && pipeContent == "" && !flagVals.Interactive && flagVals.File == nil {
 		return fmt.Errorf("what's your command?")
 	}
 	if pipeContent != "" {
 		usrMsg = fmt.Sprintf(CONTEXT_TEMPLATE, pipeContent, usrMsg)
 	}
 
-	// TODO require -f flag for file input, use it for image too
-	if _, err := os.Stat(usrMsg); err == nil {
-		f, err := os.Open(usrMsg)
+	message := &provider.Message{
+		Role:    provider.User,
+		Content: usrMsg,
+	}
+
+	if flagVals.File != nil {
+		f, err := os.Open(*flagVals.File)
+		if err != nil {
+			return fmt.Errorf("failed to open file: %w", err)
+		}
+		data, err := io.ReadAll(f)
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
-		segments, err := prov.Transcribe(ctx, cfg, &provider.AudioFile{FilePath: usrMsg, Reader: f})
-		if err != nil {
-			return fmt.Errorf("failed to transcribe: %w", err)
+		contentType := http.DetectContentType(data)
+
+		if strings.HasPrefix(contentType, AUDIO_MIME_PREFIX) {
+			segments, err := prov.Transcribe(ctx, cfg, &provider.AudioFile{FilePath: *flagVals.File, Reader: bytes.NewReader(data)})
+			if err != nil {
+				return fmt.Errorf("failed to transcribe: %w", err)
+			}
+			var out strings.Builder
+			for _, segment := range segments {
+				out.WriteString(fmt.Sprintf("%v - %v\n", segment.Start, segment.End))
+				out.WriteString(fmt.Sprintf("%s\n", segment.Text))
+			}
+			os.Stdout.Write([]byte(out.String()))
+			return nil
 		}
-		var out strings.Builder
-		for _, segment := range segments {
-			out.WriteString(fmt.Sprintf("%v - %v\n", segment.Start, segment.End))
-			out.WriteString(fmt.Sprintf("%s\n", segment.Text))
+
+		if strings.HasPrefix(contentType, IMAGE_MIME_PREFIX) {
+			message.Content = ""
+			message.MultiPart = append(message.MultiPart,
+				&provider.MessagePart{
+					Field: &provider.TextPart{
+						Text: usrMsg,
+					},
+				},
+				&provider.MessagePart{
+					Field: &provider.ImagePart{
+						Data: fmt.Sprintf("data:%s;base64,%s", contentType, base64.StdEncoding.EncodeToString(data)),
+					},
+				},
+			)
 		}
-		os.Stdout.Write([]byte(out.String()))
-		return nil
 	}
 
 	switch {
 	case flagVals.Interactive:
-		err = multiTurn(ctx, os.Stdout, in, usrMsg, turnFn)
+		err = multiTurn(ctx, os.Stdout, in, message, turnFn)
 	default:
-		_, err = turnFn(ctx, os.Stdout, []*provider.Message{
-			{
-				Role:    provider.User,
-				Content: usrMsg,
-			},
-		})
+		_, err = turnFn(ctx, os.Stdout, []*provider.Message{message})
 	}
 	return err
 }

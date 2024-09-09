@@ -14,8 +14,9 @@ import (
 const (
 	GROQ_API_KEY = "GROQ_API_KEY"
 
-	DEFAULT_AUDIO_MODEL = "whisper-large-v3"
-	DEFAULT_CHAT_MODEL  = "llama-3.1-8b-instant"
+	DEFAULT_AUDIO_MODEL      = "whisper-large-v3"
+	DEFAULT_CHAT_MODEL       = "llama-3.1-8b-instant"
+	DEFAULT_CHAT_IMAGE_MODEL = "llava-v1.5-7b-4096-preview"
 )
 
 // Groq implements OpenAI API compatability.
@@ -40,13 +41,40 @@ type openAIProvider struct {
 
 func (p *openAIProvider) Stream(ctx context.Context, cfg *config.Config, msgs []*Message) (io.Reader, error) {
 	var messages []openai.ChatCompletionMessage
+	hasImage := false
 	for _, msg := range msgs {
 		switch msg.Role {
 		case User:
-			messages = append(messages, openai.ChatCompletionMessage{
-				Role:    openai.ChatMessageRoleUser,
-				Content: msg.Content,
-			})
+			if msg.Content == "" {
+				chatMessage := openai.ChatCompletionMessage{
+					Role: openai.ChatMessageRoleUser,
+				}
+				for _, part := range msg.MultiPart {
+					switch part.Field.(type) {
+					case *ImagePart:
+						chatMessage.MultiContent = append(chatMessage.MultiContent, openai.ChatMessagePart{
+							Type: openai.ChatMessagePartTypeImageURL,
+							ImageURL: &openai.ChatMessageImageURL{
+								URL: part.Field.(*ImagePart).Data,
+							},
+						})
+						hasImage = true
+					case *TextPart:
+						chatMessage.MultiContent = append(chatMessage.MultiContent, openai.ChatMessagePart{
+							Type: openai.ChatMessagePartTypeText,
+							Text: part.Field.(*TextPart).Text,
+						})
+					default:
+						panic("unknown part type")
+					}
+				}
+				messages = append(messages, chatMessage)
+			} else {
+				messages = append(messages, openai.ChatCompletionMessage{
+					Role:    openai.ChatMessageRoleUser,
+					Content: msg.Content,
+				})
+			}
 		case Assistant:
 			messages = append(messages, openai.ChatCompletionMessage{
 				Role:    openai.ChatMessageRoleAssistant,
@@ -61,6 +89,13 @@ func (p *openAIProvider) Stream(ctx context.Context, cfg *config.Config, msgs []
 	if cfg.Model[config.ModelTypeChat] != "" {
 		model = cfg.Model[config.ModelTypeChat]
 	}
+	if hasImage {
+		model = DEFAULT_CHAT_IMAGE_MODEL
+		if cfg.Model[config.ModelTypeChatImage] != "" {
+			model = cfg.Model[config.ModelTypeChatImage]
+		}
+	}
+
 	stream, err := p.client.CreateChatCompletionStream(ctx, openai.ChatCompletionRequest{
 		Model:    model,
 		Messages: messages,

@@ -62,7 +62,7 @@ cat README.md | cmd describe in one line
 
 Chat with audio: pipe transcription (which could be expensive operation time-wise due to audio size) to interactive mode (`cmd -i`) to ask as many questions as you want with the same audio context:
 ```bash
-cmd audio.mp3 | cmd -i
+cmd -f audio.mp3 | cmd -i
 ```
 
 ### Interactive mode
