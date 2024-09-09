@@ -1,16 +1,7 @@
 
 # cmd
 
-Most common usage is to pass your message as an argument: `cmd hi` or `cmd "what's up?"`. More interestingly, you can pipe content to it:
-```bash
-cat README.md | cmd describe in one line
-`cmd` is a command-line tool that leverages AI to generate shell commands, scripts, or code from natural language input.
-```
-
-Chat with audio: pipe transcription (which could be expensive operation time-wise due to audio size) to interactive mode (`cmd -i`) to ask multi turn questions with the same audio context:
-```bash
-cmd audio.mp3 | cmd -i
-```
+`cmd` is a command-line interface to generate scripts, transform text, transcribe audio, search images or simply reminding you that command option that you were about to google.
 
 ## Install
 
@@ -18,9 +9,17 @@ cmd audio.mp3 | cmd -i
 $ brew tap daulet/cmd && brew install cmd
 ```
 
-## Run model output (code blocks)
+## Features
 
-If you'd like to run the generated shell command or code, use `--run`:
+### Run model output
+
+`cmd -r build a snake game`
+
+![snake example](./.github/snake.gif)
+
+<details>
+
+To run the generated shell command or code, use `--run` (alias `-r`):
 ```bash
 $ cmd --run print third last commit hash
 To print the third last commit hash, you can use the following Git command:
@@ -33,9 +32,15 @@ a200e6d429e2888344d7254ac02a00618ab432a2
 ```
 Supported languages include Go, Bash, Python and HTML. The language is assumed from identifier immediately following backticks of fenced code blocks, hence it could be error prone if no language is specified, or if code is broken down into multiple blocks (common for HTML).
 
-## Execute model output (code blocks)
+</details>
 
-To _just_ execute generated command or a script (like `--run`), but _without_ actually outputing it (useful for piping), use `--execute` (`-e`), which will not output generation hence be patient:
+### Run without output
+
+![git log example](./.github/git_log.gif)
+
+<details>
+
+_Only_ execute generated command or a script (like `--run`), _without_ actually outputing it (useful for piping), use `--execute` (`-e`), which will not output generation hence be patient:
 ```bash
 $ cmd --execute print shell command to brief description for last five commits
 27a6a07 add an option to execute generate command
@@ -45,7 +50,22 @@ a200e6d simplify now that code parsing is async
 d42893c (HEAD -> main, origin/main) simplify code parser, make exec truly optional
 ```
 
-## Interactive mode
+</details>
+
+### Pipe
+
+```bash
+cat README.md | cmd describe in one line
+
+`cmd` is a command-line interface that pipes data to LLMs for code generation, shell commands, or text, offering interactive mode, model configuration, and execution options.
+```
+
+Chat with audio: pipe transcription (which could be expensive operation time-wise due to audio size) to interactive mode (`cmd -i`) to ask as many questions as you want with the same audio context:
+```bash
+cmd audio.mp3 | cmd -i
+```
+
+### Interactive mode
 
 To start a multi turn chat session use `-i`:
 ```bash
@@ -59,7 +79,7 @@ $ cmd -r -i
 User> html for a bouncing ball
 ```
 
-## Configure
+### Configure
 
 You can check current configuration using `cmd --config`, and to change it use:
 * `--model` to set the model (use `--list-models` to see your options);
