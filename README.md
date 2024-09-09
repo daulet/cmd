@@ -60,11 +60,6 @@ cat README.md | cmd describe in one line
 `cmd` is a command-line interface that pipes data to LLMs for code generation, shell commands, or text, offering interactive mode, model configuration, and execution options.
 ```
 
-Chat with audio: pipe transcription (which could be expensive operation time-wise due to audio size) to interactive mode (`cmd -i`) to ask as many questions as you want with the same audio context:
-```bash
-cmd -f audio.mp3 | cmd -i
-```
-
 ### Interactive mode
 
 To start a multi turn chat session use `-i`:
@@ -79,7 +74,23 @@ $ cmd -r -i
 User> html for a bouncing ball
 ```
 
+### Image input
+
+```bash
+$ cmd -f image.png is this image of llama
+```
+
+### Audio input
+
+```bash
+$ cmd -f audio.mp3 | cmd -i
+```
+
+Audio transcription could be expensive, so to avoid re-transcribing pipe it into interactive mode (`cmd -i`) to ask multiple questions with the same audio context.
+
 ### Configure
+
+<details>
 
 You can check current configuration using `cmd --config`, and to change it use:
 * `--model` to set the model (use `--list-models` to see your options);
@@ -93,12 +104,15 @@ You can check current configuration using `cmd --config`, and to change it use:
 $ cmd --connector web-search --connector google-drive
 ```
 
-# Cool use cases
+</details>
 
-## Search images
 
-```
-find images -maxdepth 1 -type f -name "*.jpg" -exec cmd -f {} is this image of llama \; -print
+## Cool use cases
+
+### Search images
+
+```bash
+$ find images -maxdepth 1 -type f -name "*.jpg" -exec cmd -f {} is this image of llama \; -print
 
 No, this image is of a penguin, not a llama. It is a black and white drawing of a penguin on white and black background.
 images/penguin.jpg
@@ -107,14 +121,14 @@ images/llama.jpg
 ```
 
 
-## Read PDF document
+### Read PDF document
 
 Pipe with xpdf (`brew install xpdf`) or similar:
 ```bash
 $ pdftotext -nopgbrk -eol unix -q document.pdf - | cmd tldr
 ```
 
-## Use web search
+### Use web search
 
 Seemingly unrelated tasks could benefit from web search, e.g. here is a result of `cmd -run html for a bouncing ball`:
 
@@ -124,7 +138,7 @@ and here is the result with web search enabled (`cmd -connectors web-search`):
 
 ![gif of a bouncing ball](./.github/ball_web.gif)
 
-## Data transformation
+### Data transformation
 
 A common mundane task that this tool could simplify is transforming or otherwise parsing data from one format to another. However, there are multiple ways to approach this, e.g. you could ask LLM to transform the data directly, or you could ask cmd to write a program to transform the data. The better solution depends on the amount of data you have, and the complexity of the transformation.
 ```bash
